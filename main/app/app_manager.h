@@ -66,7 +66,7 @@ private:
     std::string pending_switch_id_;
     bool pending_switch_ = false;
 
-    AppContext* app_context_ = nullptr;
+    AppContext app_context_;
 
     // LVGL screen objects
     lv_obj_t* home_screen_ = nullptr;

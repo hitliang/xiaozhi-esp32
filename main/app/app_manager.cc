@@ -28,7 +28,7 @@ static LvglTheme* GetLvglTheme() {
 }
 
 void AppManager::InitializeLauncher(AppContext& ctx) {
-    app_context_ = &ctx;
+    app_context_ = ctx;
 
     // Save the default screen (screen 0) where XiaoZhi UI lives
     auto* display = Board::GetInstance().GetDisplay();
@@ -549,7 +549,7 @@ void AppManager::ProcessPendingSwitch() {
 
     // Load and enter the app
     lv_screen_load(app_screen_);
-    target_app->OnEnter(*app_context_, app_screen_);
+    target_app->OnEnter(app_context_, app_screen_);
 
     current_app_ = target_app;
     current_app_id_ = pending_switch_id_;
