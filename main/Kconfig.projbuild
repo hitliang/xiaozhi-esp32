@@ -968,4 +968,12 @@ menu "TAIJIPAI_S3_CONFIG"
         启动双声道
 endmenu
 
+    config USE_APP_LAUNCHER
+        bool "Enable Multi-App Launcher"
+        default y
+        help
+            Enable the home screen + 3x3 app grid launcher system.
+            When enabled, the device boots to a home screen showing time,
+            WiFi status, and battery. Swipe to access the app grid.
+
 endmenu

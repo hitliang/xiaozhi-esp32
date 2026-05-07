@@ -36,10 +36,18 @@ set(SOURCES "audio/audio_codec.cc"
             "settings.cc"
             "device_state_machine.cc"
             "assets.cc"
+            "app/app_manager.cc"
+            "app/apps/xiaozhi_app.cc"
+            "app/apps/settings_app.cc"
+            "app/apps/weather_app.cc"
+            "app/apps/audio_test_app.cc"
+            "app/apps/attitude_app.cc"
+            "app/apps/ball_physics_app.cc"
+            "app/apps/snake_app.cc"
             "main.cc"
             )
 
-set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
+set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols" "app" "app/apps")
 
 # Add board common files
 list(APPEND SOURCES

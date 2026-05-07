@@ -11,6 +11,7 @@
 #include "power_save_timer.h"
 #include "axp2101.h"
 #include "i2c_device.h"
+#include "app/app_manager.h"
 
 #include <esp_log.h>
 #include <esp_lcd_panel_vendor.h>
@@ -200,7 +201,10 @@ private:
                 EnterWifiConfigMode();
                 return;
             }
-            app.ToggleChatState();
+            // Route through AppManager for unified behavior:
+            // - In app: exit app, return to home
+            // - On home/grid: enter black/sleep screen
+            AppManager::GetInstance().HandleBootClick();
         });
     }
 

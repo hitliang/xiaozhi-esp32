@@ -9,6 +9,14 @@
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
+#include "app/app_manager.h"
+#include "app/apps/xiaozhi_app.h"
+#include "app/apps/settings_app.h"
+#include "app/apps/weather_app.h"
+#include "app/apps/audio_test_app.h"
+#include "app/apps/attitude_app.h"
+#include "app/apps/ball_physics_app.h"
+#include "app/apps/snake_app.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -67,6 +75,23 @@ void Application::Initialize() {
     display->SetupUI();
     // Print board name/version info
     display->SetChatMessage("system", SystemInfo::GetUserAgent().c_str());
+
+    // Initialize app launcher
+    {
+        AppContext ctx;
+        ctx.display = display;
+        auto& mgr = AppManager::GetInstance();
+        mgr.InitializeLauncher(ctx);
+
+        // Register all apps
+        mgr.RegisterApp("xiaozhi", std::make_unique<XiaozhiApp>());
+        mgr.RegisterApp("settings", std::make_unique<SettingsApp>());
+        mgr.RegisterApp("weather", std::make_unique<WeatherApp>());
+        mgr.RegisterApp("attitude", std::make_unique<AttitudeApp>());
+        mgr.RegisterApp("ball_physics", std::make_unique<BallPhysicsApp>());
+        mgr.RegisterApp("snake", std::make_unique<SnakeApp>());
+        mgr.RegisterApp("audio_test", std::make_unique<AudioTestApp>());
+    }
 
     // Setup the audio service
     auto codec = board.GetAudioCodec();
@@ -249,7 +274,10 @@ void Application::Run() {
             clock_ticks_++;
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
-        
+
+            // Update app launcher
+            AppManager::GetInstance().OnClockTick();
+
             // Print debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
                 SystemInfo::PrintHeapStats();
