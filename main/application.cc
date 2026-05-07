@@ -774,18 +774,20 @@ void Application::HandleStartListeningEvent() {
     }
     
     if (state == kDeviceStateIdle) {
+        ListeningMode mode = GetDefaultListeningMode();
         if (!protocol_->IsAudioChannelOpened()) {
             SetDeviceState(kDeviceStateConnecting);
             // Schedule to let the state change be processed first (UI update)
-            Schedule([this]() {
-                ContinueOpenAudioChannel(kListeningModeManualStop);
+            Schedule([this, mode]() {
+                ContinueOpenAudioChannel(mode);
             });
             return;
         }
-        SetListeningMode(kListeningModeManualStop);
+        SetListeningMode(mode);
     } else if (state == kDeviceStateSpeaking) {
         AbortSpeaking(kAbortReasonNone);
-        SetListeningMode(kListeningModeManualStop);
+    } else if (state == kDeviceStateListening) {
+        protocol_->CloseAudioChannel();
     }
 }
 

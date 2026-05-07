@@ -20,10 +20,10 @@ void XiaozhiApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
         display->SetEmotion("neutral");
     }
 
-    // Start auto-listening
+    // Start voice interaction (same path as BOOT button in original code)
     auto& app = Application::GetInstance();
     if (app.GetDeviceState() == kDeviceStateIdle) {
-        app.StartListening();
+        app.ToggleChatState();
     }
 
     ESP_LOGI(TAG, "Entered XiaoZhi app");
