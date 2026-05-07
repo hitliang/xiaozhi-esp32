@@ -274,22 +274,26 @@ void AppManager::BuildGridScreen() {
             self->OnSwipeRight();
         }
     }, LV_EVENT_GESTURE, this);
+}
 
-    // Populate tiles
+void AppManager::PopulateGridTiles() {
+    auto* display = Board::GetInstance().GetDisplay();
+    DisplayLockGuard lock(display);
+
     int count = apps_.size();
     if (count > 9) count = 9;
     for (int i = 0; i < count; i++) {
         auto* tile = grid_tiles_[i];
-        if (tile) {
-            uint32_t child_cnt = lv_obj_get_child_cnt(tile);
-            if (child_cnt >= 2) {
-                lv_obj_t* icon_label = lv_obj_get_child(tile, 0);
-                lv_obj_t* name_label = lv_obj_get_child(tile, 1);
-                if (icon_label) lv_label_set_text(icon_label, apps_[i].second->GetIcon());
-                if (name_label) lv_label_set_text(name_label, apps_[i].second->GetName());
-            }
+        if (!tile) continue;
+        uint32_t child_cnt = lv_obj_get_child_cnt(tile);
+        if (child_cnt >= 2) {
+            lv_obj_t* icon_label = lv_obj_get_child(tile, 0);
+            lv_obj_t* name_label = lv_obj_get_child(tile, 1);
+            if (icon_label) lv_label_set_text(icon_label, apps_[i].second->GetIcon());
+            if (name_label) lv_label_set_text(name_label, apps_[i].second->GetName());
         }
     }
+    ESP_LOGI(TAG, "Grid populated with %d apps", count);
 }
 
 void AppManager::BuildBlackScreen() {
@@ -358,6 +362,8 @@ void AppManager::UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_la
 void AppManager::ShowHome() {
     if (screen_off_) return;
     home_active_ = true;
+    auto* display = Board::GetInstance().GetDisplay();
+    DisplayLockGuard lock(display);
     lv_screen_load(home_screen_);
     ESP_LOGI(TAG, "Showing home screen");
 }
@@ -365,6 +371,8 @@ void AppManager::ShowHome() {
 void AppManager::ShowGrid() {
     if (screen_off_) return;
     home_active_ = false;
+    auto* display = Board::GetInstance().GetDisplay();
+    DisplayLockGuard lock(display);
     lv_screen_load(grid_screen_);
     ESP_LOGI(TAG, "Showing grid screen");
 }
@@ -409,15 +417,27 @@ void AppManager::ExitBlackScreen() {
 
 void AppManager::OnSwipeLeft() {
     if (screen_off_) return;
-    if (home_active_) {
-        ShowGrid();
+    if (home_active_ && !swipe_pending_) {
+        swipe_pending_ = true;
+        Application::GetInstance().Schedule([this]() {
+            if (home_active_ && !screen_off_) {
+                ShowGrid();
+            }
+            swipe_pending_ = false;
+        });
     }
 }
 
 void AppManager::OnSwipeRight() {
     if (screen_off_) return;
-    if (!home_active_) {
-        ShowHome();
+    if (!home_active_ && !swipe_pending_) {
+        swipe_pending_ = true;
+        Application::GetInstance().Schedule([this]() {
+            if (!home_active_ && !screen_off_) {
+                ShowHome();
+            }
+            swipe_pending_ = false;
+        });
     }
 }
 

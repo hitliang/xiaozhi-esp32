@@ -38,6 +38,9 @@ public:
     // Is the screen currently in black/sleep mode?
     bool IsScreenOff() const { return screen_off_; }
 
+    // Populate grid tiles with registered app icons and names
+    void PopulateGridTiles();
+
     // Get list of registered apps (for launcher grid building)
     const std::vector<std::pair<std::string, App*>>& GetApps() const { return apps_; }
 
@@ -87,6 +90,7 @@ private:
 
     bool screen_off_ = false;
     bool home_active_ = true;  // true=home visible, false=grid visible
+    bool swipe_pending_ = false;
 
     void BuildHomeScreen();
     void BuildGridScreen();

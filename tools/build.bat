@@ -20,13 +20,13 @@ call %IDF_PATH%\export.bat >nul 2>nul
 cd /d C:\code\xiaozhi-esp32-main
 
 if "%1"=="" (
-    set CMD=build
+    set ARGS=build
 ) else (
-    set CMD=%1
+    set ARGS=%1 %2 %3 %4
 )
 
-echo ===== xiaozhi-esp32: idf.py %CMD% =====
-idf.py %CMD%
+echo ===== xiaozhi-esp32: idf.py %ARGS% =====
+idf.py %ARGS%
 echo ===== DONE (exit code: %ERRORLEVEL%) =====
 
 endlocal

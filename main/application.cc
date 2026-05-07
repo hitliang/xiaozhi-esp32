@@ -91,6 +91,9 @@ void Application::Initialize() {
         mgr.RegisterApp("ball_physics", std::make_unique<BallPhysicsApp>());
         mgr.RegisterApp("snake", std::make_unique<SnakeApp>());
         mgr.RegisterApp("audio_test", std::make_unique<AudioTestApp>());
+
+        // Now populate grid tiles with registered apps
+        mgr.PopulateGridTiles();
     }
 
     // Setup the audio service
