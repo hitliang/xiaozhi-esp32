@@ -362,6 +362,11 @@ void AppManager::UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_la
 void AppManager::ShowHome() {
     if (screen_off_) return;
     home_active_ = true;
+
+    // Cancel any stale pending app switch (e.g. tile click during swipe gesture)
+    pending_switch_ = false;
+    pending_switch_id_.clear();
+
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
     lv_screen_load(home_screen_);
@@ -371,6 +376,11 @@ void AppManager::ShowHome() {
 void AppManager::ShowGrid() {
     if (screen_off_) return;
     home_active_ = false;
+
+    // Cancel any stale pending app switch
+    pending_switch_ = false;
+    pending_switch_id_.clear();
+
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
     lv_screen_load(grid_screen_);
@@ -419,6 +429,10 @@ void AppManager::OnSwipeLeft() {
     if (screen_off_) return;
     if (home_active_ && !swipe_pending_) {
         swipe_pending_ = true;
+        // Cancel any stale pending app switch and suppress clicks for 500ms
+        pending_switch_ = false;
+        pending_switch_id_.clear();
+        last_swipe_time_ms_ = xTaskGetTickCount();
         Application::GetInstance().Schedule([this]() {
             if (home_active_ && !screen_off_) {
                 ShowGrid();
@@ -432,6 +446,10 @@ void AppManager::OnSwipeRight() {
     if (screen_off_) return;
     if (!home_active_ && !swipe_pending_) {
         swipe_pending_ = true;
+        // Cancel any stale pending app switch and suppress clicks for 500ms
+        pending_switch_ = false;
+        pending_switch_id_.clear();
+        last_swipe_time_ms_ = xTaskGetTickCount();
         Application::GetInstance().Schedule([this]() {
             if (!home_active_ && !screen_off_) {
                 ShowHome();
@@ -442,6 +460,10 @@ void AppManager::OnSwipeRight() {
 }
 
 void AppManager::OpenApp(int grid_index) {
+    // Ignore clicks that arrive during/just after a swipe gesture
+    // (500ms debounce to prevent stale touch events from triggering app launch)
+    if (home_active_ || screen_off_ || swipe_pending_) return;
+    if ((int)(xTaskGetTickCount() - last_swipe_time_ms_) < 500) return;
     if (grid_index < 0 || grid_index >= (int)apps_.size()) return;
 
     const auto& id_str = apps_[grid_index].first;
