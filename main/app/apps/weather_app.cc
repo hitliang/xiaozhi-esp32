@@ -14,7 +14,7 @@ void WeatherApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
 
     // Title
     lv_obj_t* title = lv_label_create(screen);
-    lv_label_set_text(title, "天气");
+    lv_label_set_text(title, "Weather");
     lv_obj_set_style_text_font(title, theme->large_icon_font()->font(), 0);
     lv_obj_set_style_text_color(title, theme->text_color(), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 16);
@@ -28,7 +28,7 @@ void WeatherApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
 
     // Status text
     lv_obj_t* status = lv_label_create(screen);
-    lv_label_set_text(status, "天气功能开发中...\n需配置高德API Key");
+    lv_label_set_text(status, "Weather (WIP)\nNeeds Amap API Key");
     lv_obj_set_style_text_font(status, text_font, 0);
     lv_obj_set_style_text_color(status, theme->text_color(), 0);
     lv_obj_set_style_text_align(status, LV_TEXT_ALIGN_CENTER, 0);

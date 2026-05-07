@@ -19,7 +19,7 @@ void SettingsApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
 
     // Title
     lv_obj_t* title = lv_label_create(screen);
-    lv_label_set_text(title, "系统信息");
+    lv_label_set_text(title, "System Info");
     lv_obj_set_style_text_font(title, theme->large_icon_font()->font(), 0);
     lv_obj_set_style_text_color(title, theme->text_color(), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 16);
@@ -41,7 +41,7 @@ void SettingsApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
     // WiFi SSID
     {
         std::string info = "WiFi: ";
-        info += wifi.IsConnected() ? wifi.GetSsid() : "未连接";
+        info += wifi.IsConnected() ? wifi.GetSsid() : "Disconnected";
 
         lv_obj_t* label = lv_label_create(list);
         lv_label_set_text(label, info.c_str());
@@ -65,7 +65,7 @@ void SettingsApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
     // Signal
     {
         char buf[64];
-        snprintf(buf, sizeof(buf), "信号: %d dBm", wifi.GetRssi());
+        snprintf(buf, sizeof(buf), "Signal: %d dBm", wifi.GetRssi());
 
         lv_obj_t* label = lv_label_create(list);
         lv_label_set_text(label, buf);
@@ -78,10 +78,10 @@ void SettingsApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
     {
         int level;
         bool charging, discharging;
-        std::string info = "电池: ";
+        std::string info = "Battery: ";
         if (board.GetBatteryLevel(level, charging, discharging)) {
             info += std::to_string(level) + "%";
-            info += charging ? " 充电中" : (discharging ? " 放电中" : "");
+            info += charging ? " (Charging)" : (discharging ? " (Discharging)" : "");
         } else {
             info += "N/A";
         }
@@ -106,7 +106,7 @@ void SettingsApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
 
     // Board
     {
-        std::string info = "硬件: ";
+        std::string info = "Board: ";
         info += BOARD_NAME;
 
         lv_obj_t* label = lv_label_create(list);

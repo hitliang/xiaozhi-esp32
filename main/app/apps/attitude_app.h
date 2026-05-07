@@ -5,7 +5,7 @@
 
 class AttitudeApp : public App {
 public:
-    const char* GetName() const override { return "姿态仪"; }
+    const char* GetName() const override { return "Attitude"; }
     const char* GetIcon() const override { return FONT_AWESOME_COMPASS; }
 
     void OnEnter(AppContext& ctx, lv_obj_t* screen) override;

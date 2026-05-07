@@ -5,7 +5,7 @@
 
 class XiaozhiApp : public App {
 public:
-    const char* GetName() const override { return "小智AI"; }
+    const char* GetName() const override { return "XiaoZhi AI"; }
     const char* GetIcon() const override { return FONT_AWESOME_MICROCHIP_AI; }
 
     void OnEnter(AppContext& ctx, lv_obj_t* screen) override;

@@ -128,7 +128,7 @@ void AppManager::BuildHomeScreen() {
     lv_obj_t* hint = lv_label_create(home_screen_);
     lv_obj_set_style_text_font(hint, text_font, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(0x555555), 0);
-    lv_label_set_text(hint, "←  滑动打开菜单  →");
+    lv_label_set_text(hint, "← Swipe for Menu →");
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -20);
 
     // Swipe gesture detection
@@ -150,13 +150,12 @@ void AppManager::BuildGridScreen() {
     auto* display = Board::GetInstance().GetDisplay();
     auto* text_font = theme->text_font()->font();
     auto* icon_font = theme->icon_font()->font();
-    auto* large_icon_font = theme->large_icon_font()->font();
     DisplayLockGuard lock(display);
 
     auto bg_color = lv_color_black();
     auto fg_color = lv_color_hex(0xFFFFFF);
-    auto tile_bg = lv_color_hex(0x1A1A1A);
-    auto tile_border = lv_color_hex(0x333333);
+    auto tile_bg = lv_color_hex(0x000000);
+    auto tile_border = lv_color_hex(0x000000);
 
     grid_screen_ = lv_obj_create(nullptr);
     lv_obj_set_size(grid_screen_, display->width(), display->height());
@@ -236,18 +235,23 @@ void AppManager::BuildGridScreen() {
             lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
             lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-            // Icon
+            // Icon - use icon_font for compact grid tiles
             lv_obj_t* icon = lv_label_create(tile);
-            lv_obj_set_style_text_font(icon, large_icon_font, 0);
+            lv_obj_set_style_text_font(icon, icon_font, 0);
             lv_obj_set_style_text_color(icon, fg_color, 0);
+            lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_set_width(icon, LV_PCT(100));
             lv_label_set_text(icon, "");
 
-            // Name
+            // Name - use proportional Montserrat font for compact English text
             lv_obj_t* name = lv_label_create(tile);
-            lv_obj_set_style_text_font(name, text_font, 0);
+            lv_obj_set_style_text_font(name, &lv_font_montserrat_14, 0);
             lv_obj_set_style_text_color(name, fg_color, 0);
+            lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_set_width(name, LV_PCT(100));
+            lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
             lv_label_set_text(name, "");
-            lv_obj_set_style_margin_top(name, 4, 0);
+            lv_obj_set_style_margin_top(name, 2, 0);
 
             lv_obj_set_user_data(tile, icon);
 
