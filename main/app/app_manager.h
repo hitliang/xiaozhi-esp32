@@ -91,6 +91,7 @@ private:
     bool screen_off_ = false;
     bool home_active_ = true;  // true=home visible, false=grid visible
     bool swipe_pending_ = false;
+    uint32_t last_swipe_time_ms_ = 0;  // debounce: suppress clicks after swipe
 
     void BuildHomeScreen();
     void BuildGridScreen();
