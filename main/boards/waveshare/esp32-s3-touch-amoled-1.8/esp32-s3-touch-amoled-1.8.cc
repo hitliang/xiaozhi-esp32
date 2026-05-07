@@ -288,6 +288,17 @@ private:
             .handle = tp,
         };
         lvgl_port_add_touch(&touch_cfg);
+
+        // Increase gesture detection threshold so short taps are not mistaken for swipes
+        lv_indev_t* indev = lv_indev_get_next(NULL);
+        while (indev) {
+            if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {
+                lv_indev_set_gesture_min_distance(indev, 80);
+                break;
+            }
+            indev = lv_indev_get_next(indev);
+        }
+
         ESP_LOGI(TAG, "Touch panel initialized successfully");
     }
 

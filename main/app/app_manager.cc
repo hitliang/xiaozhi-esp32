@@ -429,10 +429,8 @@ void AppManager::OnSwipeLeft() {
     if (screen_off_) return;
     if (home_active_ && !swipe_pending_) {
         swipe_pending_ = true;
-        // Cancel any stale pending app switch and suppress clicks for 500ms
         pending_switch_ = false;
         pending_switch_id_.clear();
-        last_swipe_time_ms_ = xTaskGetTickCount();
         Application::GetInstance().Schedule([this]() {
             if (home_active_ && !screen_off_) {
                 ShowGrid();
@@ -446,10 +444,8 @@ void AppManager::OnSwipeRight() {
     if (screen_off_) return;
     if (!home_active_ && !swipe_pending_) {
         swipe_pending_ = true;
-        // Cancel any stale pending app switch and suppress clicks for 500ms
         pending_switch_ = false;
         pending_switch_id_.clear();
-        last_swipe_time_ms_ = xTaskGetTickCount();
         Application::GetInstance().Schedule([this]() {
             if (!home_active_ && !screen_off_) {
                 ShowHome();
@@ -460,10 +456,7 @@ void AppManager::OnSwipeRight() {
 }
 
 void AppManager::OpenApp(int grid_index) {
-    // Ignore clicks that arrive during/just after a swipe gesture
-    // (500ms debounce to prevent stale touch events from triggering app launch)
-    if (home_active_ || screen_off_ || swipe_pending_) return;
-    if ((int)(xTaskGetTickCount() - last_swipe_time_ms_) < 500) return;
+    if (home_active_ || screen_off_) return;
     if (grid_index < 0 || grid_index >= (int)apps_.size()) return;
 
     const auto& id_str = apps_[grid_index].first;
