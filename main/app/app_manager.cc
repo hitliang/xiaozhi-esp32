@@ -575,7 +575,8 @@ void AppManager::OnClockTick() {
             }
             if (home_date_label_) {
                 char date_str[32];
-                strftime(date_str, sizeof(date_str), "%Y年%m月%d日", tm);
+                const char* wdays[] = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
+                snprintf(date_str, sizeof(date_str), "%d月%d日 %s", tm->tm_mon + 1, tm->tm_mday, wdays[tm->tm_wday]);
                 lv_label_set_text(home_date_label_, date_str);
             }
         }
