@@ -313,11 +313,7 @@ void AppManager::BuildBlackScreen() {
     lv_obj_set_style_border_width(black_screen_, 0, 0);
     lv_obj_set_style_pad_all(black_screen_, 0, 0);
 
-    // Touch anywhere on black screen to wake up
-    lv_obj_add_event_cb(black_screen_, [](lv_event_t* e) {
-        auto* self = static_cast<AppManager*>(lv_event_get_user_data(e));
-        self->ExitBlackScreen();
-    }, LV_EVENT_CLICKED, this);
+    // Wake from black screen only via BOOT button, not touch
 }
 
 void AppManager::UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_label, lv_obj_t* mute_label) {
