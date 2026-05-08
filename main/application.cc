@@ -24,6 +24,7 @@
 #include <driver/gpio.h>
 #include <arpa/inet.h>
 #include <font_awesome.h>
+#include <esp_netif_sntp.h>
 
 #define TAG "Application"
 
@@ -75,6 +76,19 @@ void Application::Initialize() {
     display->SetupUI();
     // Print board name/version info
     display->SetChatMessage("system", SystemInfo::GetUserAgent().c_str());
+
+    // Configure custom WebSocket server if set in Kconfig
+    {
+        std::string custom_url = CONFIG_CUSTOM_WEBSOCKET_URL;
+        if (!custom_url.empty()) {
+            ESP_LOGI(TAG, "Using custom WebSocket server: %s", custom_url.c_str());
+            Settings ws_settings("websocket", true);
+            ws_settings.SetString("url", custom_url);
+            ws_settings.SetString("token", "");
+            ws_settings.SetInt("version", 2);
+            skip_ota_ = true;
+        }
+    }
 
     // Initialize app launcher
     {
@@ -333,25 +347,46 @@ void Application::HandleActivationDoneEvent() {
     SystemInfo::PrintHeapStats();
     SetDeviceState(kDeviceStateIdle);
 
-    has_server_time_ = ota_->HasServerTime();
-
     auto display = Board::GetInstance().GetDisplay();
-    std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
-    display->ShowNotification(message.c_str());
-    display->SetChatMessage("system", "");
 
-    // Release OTA object after activation is complete
-    ota_.reset();
-    auto& board = Board::GetInstance();
-    board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
-
-    Schedule([this]() {
-        // Play the success sound to indicate the device is ready
+    if (skip_ota_) {
+        display->ShowNotification("已连接自定义服务器");
+        display->SetChatMessage("system", "");
         audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
-    });
+
+        // Start NTP time sync since we skip OTA server time
+        setenv("TZ", "CST-8", 1);
+        tzset();
+        esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG("ntp.aliyun.com");
+        esp_netif_sntp_init(&sntp_config);
+        ESP_LOGI(TAG, "SNTP time sync started (CST-8)");
+    } else {
+        has_server_time_ = ota_->HasServerTime();
+
+        std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
+        display->ShowNotification(message.c_str());
+        display->SetChatMessage("system", "");
+
+        // Release OTA object after activation is complete
+        ota_.reset();
+        auto& board = Board::GetInstance();
+        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+
+        Schedule([this]() {
+            audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
+        });
+    }
 }
 
 void Application::ActivationTask() {
+    if (skip_ota_) {
+        // Skip OTA, go directly to protocol initialization
+        ESP_LOGI(TAG, "Skipping OTA activation (custom server configured)");
+        InitializeProtocol();
+        xEventGroupSetBits(event_group_, MAIN_EVENT_ACTIVATION_DONE);
+        return;
+    }
+
     // Create OTA object for activation process
     ota_ = std::make_unique<Ota>();
 
@@ -508,9 +543,13 @@ void Application::InitializeProtocol() {
 
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
 
-    if (ota_->HasMqttConfig()) {
+    if (skip_ota_) {
+        // Custom server configured, use WebSocket directly
+        protocol_ = std::make_unique<WebsocketProtocol>();
+        ESP_LOGI(TAG, "Using WebSocket protocol (custom server)");
+    } else if (ota_ && ota_->HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
-    } else if (ota_->HasWebsocketConfig()) {
+    } else if (ota_ && ota_->HasWebsocketConfig()) {
         protocol_ = std::make_unique<WebsocketProtocol>();
     } else {
         ESP_LOGW(TAG, "No protocol specified in the OTA config, using MQTT");

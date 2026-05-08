@@ -976,4 +976,13 @@ endmenu
             When enabled, the device boots to a home screen showing time,
             WiFi status, and battery. Swipe to access the app grid.
 
+    config CUSTOM_WEBSOCKET_URL
+        string "Custom WebSocket Server URL"
+        default ""
+        help
+            Set a custom WebSocket server URL (e.g. ws://59.110.161.101:7070/).
+            When set, the device skips OTA activation and connects directly
+            to this server using the WebSocket protocol.
+            Leave empty to use the default OTA server.
+
 endmenu
