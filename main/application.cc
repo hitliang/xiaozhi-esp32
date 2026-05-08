@@ -85,7 +85,7 @@ void Application::Initialize() {
             Settings ws_settings("websocket", true);
             ws_settings.SetString("url", custom_url);
             ws_settings.SetString("token", "");
-            ws_settings.SetInt("version", 2);
+            ws_settings.SetInt("version", 3);  // BinaryProtocol3: 4-byte header
             skip_ota_ = true;
         }
     }
