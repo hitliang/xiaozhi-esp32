@@ -32,3 +32,6 @@ CONFIG_LV_USE_SNAPSHOT=y
 
 # Larger built-in font for time display
 CONFIG_LV_FONT_MONTSERRAT_48=y
+
+# Custom WebSocket server
+CONFIG_CUSTOM_WEBSOCKET_URL="ws://59.110.161.101:7070/"
