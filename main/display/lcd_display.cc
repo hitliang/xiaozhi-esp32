@@ -46,9 +46,9 @@ void LcdDisplay::InitializeLcdThemes() {
     auto dark_theme = new LvglTheme("dark");
     dark_theme->set_background_color(lv_color_hex(0x000000));
     dark_theme->set_text_color(lv_color_hex(0xFFFFFF));
-    dark_theme->set_chat_background_color(lv_color_hex(0x1F1F1F));
+    dark_theme->set_chat_background_color(lv_color_hex(0x000000));
     dark_theme->set_user_bubble_color(lv_color_hex(0x00FF00));
-    dark_theme->set_assistant_bubble_color(lv_color_hex(0x222222));
+    dark_theme->set_assistant_bubble_color(lv_color_hex(0x000000));
     dark_theme->set_system_bubble_color(lv_color_hex(0x000000));
     dark_theme->set_system_text_color(lv_color_hex(0xFFFFFF));
     dark_theme->set_border_color(lv_color_hex(0xFFFFFF));
@@ -70,10 +70,8 @@ LcdDisplay::LcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_
     // Initialize LCD themes
     InitializeLcdThemes();
 
-    // Load theme from settings
-    Settings settings("display", false);
-    std::string theme_name = settings.GetString("theme", "light");
-    current_theme_ = LvglThemeManager::GetInstance().GetTheme(theme_name);
+    // Use dark theme (pure black OLED-friendly)
+    current_theme_ = LvglThemeManager::GetInstance().GetTheme("dark");
 
     // Create a timer to hide the preview image
     esp_timer_create_args_t preview_timer_args = {
