@@ -115,9 +115,6 @@ void Application::Initialize() {
     audio_service_.Initialize(codec);
     audio_service_.Start();
 
-    // Set initial volume
-    codec->SetOutputVolume(30);
-
     AudioServiceCallbacks callbacks;
     callbacks.on_send_queue_available = [this]() {
         xEventGroupSetBits(event_group_, MAIN_EVENT_SEND_AUDIO);
