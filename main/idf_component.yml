@@ -115,6 +115,8 @@ dependencies:
     rules:
     - if: target in [esp32s3, esp32c5]
 
+  espp/qmi8658: ^1.0.36
+
   espressif/touch_slider_sensor:
     version: ^0.2.0~1
     rules:

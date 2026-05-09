@@ -46,6 +46,14 @@ using NetworkEventCallback = std::function<void(NetworkEvent event, const std::s
 void* create_board();
 class AudioCodec;
 class Display;
+// IMU data for attitude / motion-aware apps
+struct ImuData {
+    float accel_x, accel_y, accel_z;  // m/s²
+    float gyro_x, gyro_y, gyro_z;     // rad/s
+    float pitch, roll, yaw;           // degrees (orientation filter)
+    bool valid = false;
+};
+
 class Board {
 private:
     Board(const Board&) = delete; // 禁用拷贝构造函数
@@ -82,6 +90,7 @@ public:
     virtual void SetPowerSaveLevel(PowerSaveLevel level) = 0;
     virtual std::string GetBoardJson() = 0;
     virtual std::string GetDeviceStatusJson() = 0;
+    virtual ImuData GetImuData() { return ImuData{}; }
 };
 
 #define DECLARE_BOARD(BOARD_CLASS_NAME) \

@@ -3,6 +3,7 @@
 #include "../app.h"
 #include <font_awesome.h>
 
+class AttitudeView;
 class AttitudeApp : public App {
 public:
     const char* GetName() const override { return "Attitude"; }
@@ -10,4 +11,8 @@ public:
 
     void OnEnter(AppContext& ctx, lv_obj_t* screen) override;
     void OnExit() override;
+    bool OnUpdate() override;
+
+private:
+    AttitudeView* view_ = nullptr;
 };
