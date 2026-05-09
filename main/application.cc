@@ -13,7 +13,6 @@
 #include "app/apps/xiaozhi_app.h"
 #include "app/apps/settings_app.h"
 #include "app/apps/weather_app.h"
-#include "app/apps/audio_test_app.h"
 #include "app/apps/attitude_app.h"
 #include "app/apps/ball_physics_app.h"
 #include "app/apps/snake_app.h"
@@ -104,7 +103,6 @@ void Application::Initialize() {
         mgr.RegisterApp("attitude", std::make_unique<AttitudeApp>());
         mgr.RegisterApp("ball_physics", std::make_unique<BallPhysicsApp>());
         mgr.RegisterApp("snake", std::make_unique<SnakeApp>());
-        mgr.RegisterApp("audio_test", std::make_unique<AudioTestApp>());
 
         // Now populate grid tiles with registered apps
         mgr.PopulateGridTiles();
