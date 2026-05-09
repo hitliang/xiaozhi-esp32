@@ -195,16 +195,41 @@ private:
     }
 
     void InitializeButtons() {
+        // Single click: toggle listening in xiaozhi app, navigate elsewhere
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() == kDeviceStateStarting) {
                 EnterWifiConfigMode();
                 return;
             }
-            // Route through AppManager for unified behavior:
-            // - In app: exit app, return to home
-            // - On home/grid: enter black/sleep screen
-            AppManager::GetInstance().HandleBootClick();
+            auto& mgr = AppManager::GetInstance();
+            // Black screen: exit
+            if (mgr.IsScreenOff()) {
+                mgr.HandleBootClick();
+                return;
+            }
+            // In xiaozhi app: single click toggles listening state
+            if (mgr.GetCurrentAppId() == "xiaozhi") {
+                app.ToggleChatState();
+                return;
+            }
+            // Global (home/grid/other apps): exit app or enter black screen
+            mgr.HandleBootClick();
+        });
+
+        // Double click: in xiaozhi app, exit to black screen
+        boot_button_.OnDoubleClick([this]() {
+            auto& app = Application::GetInstance();
+            if (app.GetDeviceState() == kDeviceStateStarting) {
+                return;
+            }
+            auto& mgr = AppManager::GetInstance();
+            if (mgr.GetCurrentAppId() == "xiaozhi") {
+                mgr.HandleBootClick();
+                return;
+            }
+            // Global: same as single click (navigate)
+            mgr.HandleBootClick();
         });
     }
 
