@@ -43,6 +43,7 @@ set(SOURCES "audio/audio_codec.cc"
             "app/apps/attitude_app.cc"
             "app/apps/ball_physics_app.cc"
             "app/apps/snake_app.cc"
+            "app/apps/metronome_app.cc"
             "main.cc"
             )
 

@@ -10,7 +10,7 @@
 # ============================================================
 
 CMD="${1:-build}"
-PROJECT_DIR="C:/code/xiaozhi-esp32-main"
+PROJECT_DIR="D:/amoled_new"
 BAT_FILE="${PROJECT_DIR}/tools/build.bat"
 
 # Clear MSYSTEM for this process tree
