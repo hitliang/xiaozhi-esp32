@@ -3,6 +3,7 @@
 #include "settings.h"
 
 #include <esp_log.h>
+#include <lvgl.h>
 
 #define TAG "PowerSaveTimer"
 
@@ -67,6 +68,13 @@ void PowerSaveTimer::PowerSaveCheck() {
     }
 
     ticks_++;
+
+    // Exit sleep mode if user has interacted with the display
+    if (in_sleep_mode_ && lv_display_get_inactive_time(NULL) < (uint32_t)(seconds_to_sleep_ * 1000)) {
+        WakeUp();
+        return;
+    }
+
     if (seconds_to_sleep_ != -1 && ticks_ >= seconds_to_sleep_) {
         if (!in_sleep_mode_) {
             ESP_LOGI(TAG, "Enabling power save mode");
