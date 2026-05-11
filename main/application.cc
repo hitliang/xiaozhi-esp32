@@ -17,6 +17,7 @@
 #include "app/apps/ball_physics_app.h"
 #include "app/apps/snake_app.h"
 #include "app/apps/metronome_app.h"
+#include "app/apps/ear_trainer_app.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -105,6 +106,7 @@ void Application::Initialize() {
         mgr.RegisterApp("ball_physics", std::make_unique<BallPhysicsApp>());
         mgr.RegisterApp("snake", std::make_unique<SnakeApp>());
         mgr.RegisterApp("metronome", std::make_unique<MetronomeApp>());
+        mgr.RegisterApp("ear_trainer", std::make_unique<EarTrainerApp>());
 
         // Now populate grid tiles with registered apps
         mgr.PopulateGridTiles();

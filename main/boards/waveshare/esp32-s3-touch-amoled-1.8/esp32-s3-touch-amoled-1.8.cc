@@ -30,14 +30,16 @@
 using Imu = espp::Qmi8658<>;  // I2C interface (default)
 
 // Simple complementary filter for IMU orientation
+// Returns Value with .x=roll, .y=pitch (matching Value::roll and Value::pitch union layout)
 static Imu::Value complementary_filter(float dt, const Imu::Value& accel, const Imu::Value& gyro) {
     static float pitch = 0, roll = 0;
     float accel_pitch = atan2f(accel.y, accel.z) * 180.0f / M_PI;
     float accel_roll  = atan2f(-accel.x, accel.z) * 180.0f / M_PI;
     // gyro values are in °/s, multiply by dt for delta degrees
-    pitch = 0.98f * (pitch + gyro.x * dt) + 0.02f * accel_pitch;
-    roll  = 0.98f * (roll  + gyro.y * dt) + 0.02f * accel_roll;
-    return { pitch, roll, 0.0f };
+    pitch = 0.98f * (pitch + gyro.y * dt) + 0.02f * accel_pitch;
+    roll  = 0.98f * (roll  + gyro.x * dt) + 0.02f * accel_roll;
+    // Value uses union: x==roll, y==pitch
+    return { roll, pitch, 0.0f };
 }
 
 #define TAG "WaveshareEsp32s3TouchAMOLED1inch8"
@@ -147,9 +149,12 @@ private:
     Imu* imu_ = nullptr;
     i2c_master_dev_handle_t imu_dev_handle_ = nullptr;
     ImuData imu_data_;
+    bool imu_data_valid_ = false;
     esp_timer_handle_t imu_timer_ = nullptr;
 
     void InitializeQmi8658() {
+        printf("[IMU] InitializeQmi8658 start\n");
+
         // Add QMI8658 device on the shared I2C bus
         i2c_device_config_t imu_dev_cfg = {
             .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -158,29 +163,28 @@ private:
         };
         esp_err_t ret = i2c_master_bus_add_device(codec_i2c_bus_, &imu_dev_cfg, &imu_dev_handle_);
         if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "QMI8658: failed to add I2C device (0x%02X): %s",
-                     Imu::DEFAULT_ADDRESS, esp_err_to_name(ret));
+            printf("[IMU] add device 0x%02X failed: %s\n", Imu::DEFAULT_ADDRESS, esp_err_to_name(ret));
             // Try alternate address
             imu_dev_cfg.device_address = Imu::DEFAULT_ADDRESS_AD0_LOW;  // 0x6A
             ret = i2c_master_bus_add_device(codec_i2c_bus_, &imu_dev_cfg, &imu_dev_handle_);
             if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "QMI8658: failed to add I2C device (0x%02X): %s",
-                         Imu::DEFAULT_ADDRESS_AD0_LOW, esp_err_to_name(ret));
+                printf("[IMU] add device 0x%02X failed: %s\n", Imu::DEFAULT_ADDRESS_AD0_LOW, esp_err_to_name(ret));
                 return;
             }
         }
+        printf("[IMU] I2C device added at 0x%02X\n", imu_dev_cfg.device_address);
 
         // Create I2C write / write_then_read callbacks
         auto dev = imu_dev_handle_;
         auto write_fn = [dev](uint8_t addr, const uint8_t* data, size_t len) -> bool {
-            return i2c_master_transmit(dev, data, len, 50) == ESP_OK;
+            return i2c_master_transmit(dev, data, len, 10) == ESP_OK;
         };
         auto read_fn = [dev](uint8_t addr, uint8_t* data, size_t len) -> bool {
-            return i2c_master_receive(dev, data, len, 50) == ESP_OK;
+            return i2c_master_receive(dev, data, len, 10) == ESP_OK;
         };
         auto write_then_read_fn = [dev](uint8_t addr, const uint8_t* wdata, size_t wlen,
                                          uint8_t* rdata, size_t rlen) -> bool {
-            return i2c_master_transmit_receive(dev, wdata, wlen, rdata, rlen, 50) == ESP_OK;
+            return i2c_master_transmit_receive(dev, wdata, wlen, rdata, rlen, 10) == ESP_OK;
         };
 
         Imu::Config config{
@@ -194,16 +198,31 @@ private:
                 .gyroscope_odr = Imu::ODR::ODR_250_HZ,
             },
             .orientation_filter = complementary_filter,
-            .auto_init = true,
+            .auto_init = false,
         };
 
         imu_ = new Imu(config);
+        printf("[IMU] Imu object created\n");
         imu_->set_write_then_read(std::move(write_then_read_fn));
+
+        // Initialize after write_then_read is set, since I2C register
+        // reads need the combined write-then-read transaction.
+        std::error_code init_ec;
+        printf("[IMU] calling init()...\n");
+        if (!imu_->init(init_ec)) {
+            printf("[IMU] init FAILED: %s\n",
+                   init_ec ? init_ec.message().c_str() : "wrong device ID");
+            delete imu_;
+            imu_ = nullptr;
+            return;
+        }
+        printf("[IMU] init OK, starting timer\n");
 
         // Create a periodic timer to update IMU readings at ~50Hz
         esp_timer_create_args_t imu_timer_args = {
             .callback = [](void* arg) {
                 auto self = static_cast<WaveshareEsp32s3TouchAMOLED1inch8*>(arg);
+                if (!self->imu_) return;
                 std::error_code ec;
                 self->imu_->update(0.02f, ec);  // 20ms = 50Hz
                 if (!ec) {
@@ -213,13 +232,17 @@ private:
                     self->imu_data_ = {
                         .accel_x = accel.x, .accel_y = accel.y, .accel_z = accel.z,
                         .gyro_x = gyro.x, .gyro_y = gyro.y, .gyro_z = gyro.z,
-                        .pitch = orient.x, .roll = orient.y, .yaw = orient.z,
+                        .pitch = orient.y, .roll = orient.x, .yaw = orient.z,
                         .valid = true,
                     };
+                    if (!self->imu_data_valid_) {
+                        self->imu_data_valid_ = true;
+                        ESP_LOGI(TAG, "QMI8658 streaming OK: pitch=%.1f roll=%.1f", orient.y, orient.x);
+                    }
                 } else {
                     static int err_count = 0;
-                    if (++err_count <= 3) {
-                        ESP_LOGE(TAG, "QMI8658 update failed: %s", ec.message().c_str());
+                    if (++err_count <= 5) {
+                        ESP_LOGE(TAG, "QMI8658 update #%d failed: %s", err_count, ec.message().c_str());
                     }
                 }
             },
@@ -231,6 +254,7 @@ private:
         ESP_ERROR_CHECK(esp_timer_create(&imu_timer_args, &imu_timer_));
         ESP_ERROR_CHECK(esp_timer_start_periodic(imu_timer_, 20000));  // 20ms
 
+        printf("[IMU] timer started at 50Hz, addr=0x%02X\n", imu_dev_cfg.device_address);
         ESP_LOGI(TAG, "QMI8658 initialized at 0x%02X", imu_dev_cfg.device_address);
     }
 
