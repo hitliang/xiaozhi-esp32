@@ -4,7 +4,6 @@
 #include <font_awesome.h>
 
 class AttitudeView;
-class Display;
 class AttitudeApp : public App {
 public:
     const char* GetName() const override { return "Attitude"; }
@@ -16,5 +15,4 @@ public:
 
 private:
     AttitudeView* view_ = nullptr;
-    Display* display_ = nullptr;
 };
