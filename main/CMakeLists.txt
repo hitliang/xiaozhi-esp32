@@ -45,6 +45,7 @@ set(SOURCES "audio/audio_codec.cc"
             "app/apps/snake_app.cc"
             "app/apps/metronome_app.cc"
             "app/apps/ear_trainer_app.cc"
+            "app/apps/flappy_bird_app.cc"
             "app/apps/font_noto_60_4.c"
             "main.cc"
             )
