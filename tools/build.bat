@@ -12,12 +12,17 @@ setlocal enabledelayedexpansion
 set MSYSTEM=
 set TERM=
 
-set IDF_PATH=d:\program\idf\v5.5.4\esp-idf
-set IDF_TOOLS_PATH=C:\Users\reddy\.espressif
+set IDF_PATH=C:\esp\v5.5.4\esp-idf
+set IDF_TOOLS_PATH=C:\Users\john\.espressif
+
+REM Use ESP-IDF bundled cmake (3.30.2) instead of system cmake (4.x)
+set PATH=%IDF_TOOLS_PATH%\tools\cmake\3.30.2\bin;%PATH%
+
+set IDF_TARGET=esp32s3
 
 call %IDF_PATH%\export.bat >nul 2>nul
 
-cd /d D:\amoled_new
+cd /d C:\code\esp32\xiaozhi-esp32
 
 if "%1"=="" (
     set ARGS=build
