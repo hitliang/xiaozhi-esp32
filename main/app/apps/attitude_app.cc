@@ -11,57 +11,40 @@
 class AttitudeView {
 public:
     AttitudeView(lv_obj_t* parent, LvglTheme* theme, Display* display)
-        : display_(display) {
+        : display_(display),
+          scr_w_(lv_obj_get_width(parent)),
+          scr_h_(lv_obj_get_height(parent)) {
         DisplayLockGuard lock(display_);
         auto* text_font = theme->text_font()->font();
-        auto* icon_font = theme->large_icon_font()->font();
 
-        pitch_label_ = lv_label_create(parent);
-        lv_obj_set_style_text_font(pitch_label_, icon_font, 0);
-        lv_obj_set_style_text_color(pitch_label_, theme->text_color(), 0);
-        lv_label_set_text(pitch_label_, "P: --");
-        lv_obj_align(pitch_label_, LV_ALIGN_TOP_MID, 0, 20);
+        // Ball that rolls with gravity (bubble-level style)
+        int half = 30;
+        ball_ = lv_obj_create(parent);
+        lv_obj_set_size(ball_, half, half);
+        lv_obj_set_style_radius(ball_, half / 2, 0);
+        lv_obj_set_style_bg_color(ball_, theme->text_color(), 0);
+        lv_obj_set_style_border_width(ball_, 0, 0);
+        lv_obj_set_pos(ball_, scr_w_ / 2 - half / 2, scr_h_ / 2 - half / 2);
 
-        roll_label_ = lv_label_create(parent);
-        lv_obj_set_style_text_font(roll_label_, icon_font, 0);
-        lv_obj_set_style_text_color(roll_label_, theme->text_color(), 0);
-        lv_label_set_text(roll_label_, "R: --");
-        lv_obj_align(roll_label_, LV_ALIGN_TOP_MID, 0, 80);
+        // Pitch/Roll readout
+        info_label_ = lv_label_create(parent);
+        lv_obj_set_style_text_font(info_label_, text_font, 0);
+        lv_obj_set_style_text_color(info_label_, theme->text_color(), 0);
+        lv_label_set_text(info_label_, "P: --  R: --");
+        lv_obj_align(info_label_, LV_ALIGN_TOP_LEFT, 8, 8);
 
-        crosshair_ = lv_obj_create(parent);
-        lv_obj_set_size(crosshair_, 160, 160);
-        lv_obj_set_style_bg_opa(crosshair_, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(crosshair_, 0, 0);
-        lv_obj_align(crosshair_, LV_ALIGN_CENTER, 0, 0);
-
-        lv_obj_t* circle = lv_obj_create(crosshair_);
-        lv_obj_set_size(circle, 120, 120);
-        lv_obj_set_style_bg_opa(circle, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_color(circle, theme->text_color(), 0);
-        lv_obj_set_style_border_width(circle, 2, 0);
-        lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, 0);
-        lv_obj_center(circle);
-
-        dot_ = lv_obj_create(crosshair_);
-        lv_obj_set_size(dot_, 12, 12);
-        lv_obj_set_style_radius(dot_, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(dot_, theme->text_color(), 0);
-        lv_obj_set_style_border_width(dot_, 0, 0);
-        lv_obj_center(dot_);
-
+        // Status
         status_ = lv_label_create(parent);
         lv_obj_set_style_text_font(status_, text_font, 0);
         lv_obj_set_style_text_color(status_, theme->text_color(), 0);
         lv_label_set_text(status_, "IMU 未就绪");
-        lv_obj_align(status_, LV_ALIGN_BOTTOM_MID, 0, -20);
+        lv_obj_align(status_, LV_ALIGN_BOTTOM_MID, 0, -8);
 
         ESP_LOGI(TAG, "Attitude view created");
     }
 
     void Update(const ImuData& imu) {
         frame_count_++;
-        if (frame_count_ % 3 != 0) return;
-        frame_count_ = 0;
 
         DisplayLockGuard lock(display_);
 
@@ -74,31 +57,38 @@ public:
         }
         shown_not_ready_ = false;
 
-        char buf[32];
-        int new_dx = (int)(imu.roll  * 55.0f / 45.0f);
-        int new_dy = (int)(imu.pitch * 55.0f / 45.0f);
-        if (new_dx > 55) new_dx = 55;
-        if (new_dx < -55) new_dx = -55;
-        if (new_dy > 55) new_dy = 55;
-        if (new_dy < -55) new_dy = -55;
+        // Convert accel back to g (board code stores m/s²)
+        float ax = imu.accel_x / 9.80665f;
+        float ay = imu.accel_y / 9.80665f;
+        float az = imu.accel_z / 9.80665f;
 
-        if (new_dx != last_dx_ || new_dy != last_dy_) {
-            lv_obj_set_pos(dot_, 80 + new_dx - 6, 80 + new_dy - 6);
-            last_dx_ = new_dx;
-            last_dy_ = new_dy;
-        }
+        // Heavy low-pass on accel angles (reference: a=0.05)
+        float raw_r = atan2f(ay, -az) * 57.29578f;
+        float raw_p = atan2f(-ax, -az) * 57.29578f;
+        float a = 0.05f;
+        smooth_roll_  = smooth_roll_  * (1.0f - a) + raw_r * a;
+        smooth_pitch_ = smooth_pitch_ * (1.0f - a) + raw_p * a;
+        if (fabsf(smooth_roll_)  < 0.5f) smooth_roll_  = 0;
+        if (fabsf(smooth_pitch_) < 0.5f) smooth_pitch_ = 0;
 
-        int pitch_int = (int)(imu.pitch * 10.0f);
-        int roll_int  = (int)(imu.roll  * 10.0f);
-        if (pitch_int != last_pitch_) {
-            snprintf(buf, sizeof(buf), "Pitch: %+.1f", imu.pitch);
-            lv_label_set_text(pitch_label_, buf);
-            last_pitch_ = pitch_int;
-        }
-        if (roll_int != last_roll_) {
-            snprintf(buf, sizeof(buf), "Roll: %+.1f", imu.roll);
-            lv_label_set_text(roll_label_, buf);
-            last_roll_ = roll_int;
+        // Ball position from raw accel (bubble-level: ball goes to HIGH side)
+        int ball_half = 15;
+        int range_x = scr_w_ / 2 - ball_half;
+        int range_y = scr_h_ / 2 - ball_half;
+        int dx = (int)( ay * range_x);
+        int dy = (int)(-ax * range_y);
+        if (dx > range_x)  dx = range_x;
+        if (dx < -range_x) dx = -range_x;
+        if (dy > range_y)  dy = range_y;
+        if (dy < -range_y) dy = -range_y;
+        lv_obj_set_pos(ball_, scr_w_ / 2 + dx - ball_half, scr_h_ / 2 + dy - ball_half);
+
+        // Update labels every ~15 frames (~15Hz)
+        if (frame_count_ % 5 == 0) {
+            char buf[48];
+            snprintf(buf, sizeof(buf), "R:%+.1f  P:%+.1f",
+                     (double)smooth_roll_, (double)smooth_pitch_);
+            lv_label_set_text(info_label_, buf);
         }
 
         if (!shown_ok_) {
@@ -108,15 +98,13 @@ public:
     }
 
 private:
-    lv_obj_t* pitch_label_ = nullptr;
-    lv_obj_t* roll_label_ = nullptr;
-    lv_obj_t* crosshair_ = nullptr;
-    lv_obj_t* dot_ = nullptr;
+    lv_obj_t* ball_ = nullptr;
+    lv_obj_t* info_label_ = nullptr;
     lv_obj_t* status_ = nullptr;
     Display* display_ = nullptr;
+    int scr_w_, scr_h_;
     int frame_count_ = 0;
-    int last_dx_ = 999, last_dy_ = 999;
-    int last_pitch_ = 9999, last_roll_ = 9999;
+    float smooth_roll_ = 0, smooth_pitch_ = 0;
     bool shown_not_ready_ = false, shown_ok_ = false;
 };
 

@@ -32,14 +32,40 @@ using Imu = espp::Qmi8658<>;  // I2C interface (default)
 // Complementary filter for IMU orientation
 // All values in radians (QMI8658 library uses sinf/cosf on orientation)
 // Returns Value with .x=roll, .y=pitch (matching Value::roll and Value::pitch union layout)
+// NOTE: Waveshare board's QMI8658C has Z-up pointing down through the PCB,
+// so accel.z is negated to get correct level=0 readings.
 static Imu::Value complementary_filter(float dt, const Imu::Value& accel, const Imu::Value& gyro) {
     static float pitch = 0, roll = 0;
-    float accel_pitch = atan2f(accel.y, accel.z);       // radians
-    float accel_roll  = atan2f(-accel.x, accel.z);      // radians
-    float gyro_y_rad = gyro.y * (float)(M_PI / 180.0);  // °/s → rad/s
-    float gyro_x_rad = gyro.x * (float)(M_PI / 180.0);
-    pitch = 0.98f * (pitch + gyro_y_rad * dt) + 0.02f * accel_pitch;
-    roll  = 0.98f * (roll  + gyro_x_rad * dt) + 0.02f * accel_roll;
+    static float gyro_y_bias = 0, gyro_x_bias = 0;
+    static int calib_count = 0;
+
+    // Auto-calibrate gyro bias during first 2 seconds (~100 samples at 50Hz)
+    if (calib_count < 100) {
+        gyro_x_bias += gyro.x;
+        gyro_y_bias += gyro.y;
+        calib_count++;
+        if (calib_count == 100) {
+            gyro_x_bias /= 100.0f;
+            gyro_y_bias /= 100.0f;
+            printf("[IMU] gyro bias calibrated: x=%.2f y=%.2f dps\n",
+                   (double)gyro_x_bias, (double)gyro_y_bias);
+        }
+        return { roll, pitch, 0.0f };  // don't update during calibration
+    }
+
+    float accel_pitch = atan2f(accel.y, -accel.z);       // radians, -Z for correct orientation
+    float accel_roll  = atan2f(-accel.x, -accel.z);      // radians
+    float gyro_y_rad = (gyro.y - gyro_y_bias) * (float)(M_PI / 180.0);  // °/s → rad/s, debiased
+    float gyro_x_rad = (gyro.x - gyro_x_bias) * (float)(M_PI / 180.0);
+
+    // When |accel.z| is small (board near vertical), accel angles are unreliable.
+    // Reduce accel weight to rely more on gyro integration.
+    float az_abs = fabsf(accel.z);
+    float accel_weight = (az_abs < 0.3f) ? 0.001f : 0.02f;
+    float gyro_weight = 1.0f - accel_weight;
+
+    pitch = gyro_weight * (pitch + gyro_y_rad * dt) + accel_weight * accel_pitch;
+    roll  = gyro_weight * (roll  + gyro_x_rad * dt) + accel_weight * accel_roll;
     return { roll, pitch, 0.0f };  // radians
 }
 
