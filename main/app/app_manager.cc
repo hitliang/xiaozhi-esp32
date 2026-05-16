@@ -11,7 +11,7 @@
 
 #define TAG "AppManager"
 
-LV_FONT_DECLARE(lv_font_montserrat_48);
+LV_FONT_DECLARE(font_noto_60_4);
 
 AppManager& AppManager::GetInstance() {
     static AppManager instance;
@@ -113,9 +113,9 @@ void AppManager::BuildHomeScreen() {
     lv_obj_set_flex_flow(center, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(center, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Time - use 48px Montserrat font
+    // Time - use 60px Noto font
     home_time_label_ = lv_label_create(center);
-    lv_obj_set_style_text_font(home_time_label_, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(home_time_label_, &font_noto_60_4, 0);
     lv_obj_set_style_text_color(home_time_label_, fg_color, 0);
     lv_label_set_text(home_time_label_, "00:00");
 
