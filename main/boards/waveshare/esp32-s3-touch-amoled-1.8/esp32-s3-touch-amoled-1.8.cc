@@ -29,17 +29,18 @@
 
 using Imu = espp::Qmi8658<>;  // I2C interface (default)
 
-// Simple complementary filter for IMU orientation
+// Complementary filter for IMU orientation
+// All values in radians (QMI8658 library uses sinf/cosf on orientation)
 // Returns Value with .x=roll, .y=pitch (matching Value::roll and Value::pitch union layout)
 static Imu::Value complementary_filter(float dt, const Imu::Value& accel, const Imu::Value& gyro) {
     static float pitch = 0, roll = 0;
-    float accel_pitch = atan2f(accel.y, accel.z) * 180.0f / M_PI;
-    float accel_roll  = atan2f(-accel.x, accel.z) * 180.0f / M_PI;
-    // gyro values are in °/s, multiply by dt for delta degrees
-    pitch = 0.98f * (pitch + gyro.y * dt) + 0.02f * accel_pitch;
-    roll  = 0.98f * (roll  + gyro.x * dt) + 0.02f * accel_roll;
-    // Value uses union: x==roll, y==pitch
-    return { roll, pitch, 0.0f };
+    float accel_pitch = atan2f(accel.y, accel.z);       // radians
+    float accel_roll  = atan2f(-accel.x, accel.z);      // radians
+    float gyro_y_rad = gyro.y * (float)(M_PI / 180.0);  // °/s → rad/s
+    float gyro_x_rad = gyro.x * (float)(M_PI / 180.0);
+    pitch = 0.98f * (pitch + gyro_y_rad * dt) + 0.02f * accel_pitch;
+    roll  = 0.98f * (roll  + gyro_x_rad * dt) + 0.02f * accel_roll;
+    return { roll, pitch, 0.0f };  // radians
 }
 
 #define TAG "WaveshareEsp32s3TouchAMOLED1inch8"
@@ -205,18 +206,49 @@ private:
         printf("[IMU] Imu object created\n");
         imu_->set_write_then_read(std::move(write_then_read_fn));
 
-        // Initialize after write_then_read is set, since I2C register
-        // reads need the combined write-then-read transaction.
+        // Manual init to support QMI8658C (WHO_AM_I=0x4C) in addition to QMI8658 (0x05)
         std::error_code init_ec;
-        printf("[IMU] calling init()...\n");
-        if (!imu_->init(init_ec)) {
-            printf("[IMU] init FAILED: %s\n",
-                   init_ec ? init_ec.message().c_str() : "wrong device ID");
+        uint8_t whoami = imu_->get_device_id(init_ec);
+        printf("[IMU] WHO_AM_I = 0x%02X\n", whoami);
+        if (init_ec || (whoami != 0x05 && whoami != 0x4C)) {
+            printf("[IMU] unsupported device ID 0x%02X, init FAILED\n", whoami);
             delete imu_;
             imu_ = nullptr;
             return;
         }
-        printf("[IMU] init OK, starting timer\n");
+
+        // Write 0x60 to CTRL1 (register 0x02):
+        //   bit6=1: address auto-increment (required for multi-byte reads)
+        //   bit5=1: reserved, must be 1
+        // Done via raw I2C since write_u8_to_register is private in the library
+        {
+            uint8_t ctrl1[] = {0x02, 0x60};
+            esp_err_t ret = i2c_master_transmit(imu_dev_handle_, ctrl1, sizeof(ctrl1), 10);
+            if (ret != ESP_OK) {
+                printf("[IMU] CTRL1 write FAILED: %s\n", esp_err_to_name(ret));
+                delete imu_;
+                imu_ = nullptr;
+                return;
+            }
+        }
+
+        // Apply IMU configuration
+        if (!imu_->set_config(config.imu_config, init_ec)) {
+            printf("[IMU] set_config FAILED: %s\n", init_ec.message().c_str());
+            delete imu_;
+            imu_ = nullptr;
+            return;
+        }
+
+        // Enable accelerometer and gyroscope
+        if (!imu_->set_accelerometer_enabled(true, init_ec) || !imu_->set_gyroscope_enabled(true, init_ec)) {
+            printf("[IMU] enable sensors FAILED: %s\n", init_ec.message().c_str());
+            delete imu_;
+            imu_ = nullptr;
+            return;
+        }
+
+        printf("[IMU] init OK (%s), starting timer\n", whoami == 0x4C ? "QMI8658C" : "QMI8658");
 
         // Create a periodic timer to update IMU readings at ~50Hz
         esp_timer_create_args_t imu_timer_args = {
@@ -230,14 +262,15 @@ private:
                     auto gyro = self->imu_->get_gyroscope();
                     auto orient = self->imu_->get_orientation();
                     self->imu_data_ = {
-                        .accel_x = accel.x, .accel_y = accel.y, .accel_z = accel.z,
-                        .gyro_x = gyro.x, .gyro_y = gyro.y, .gyro_z = gyro.z,
-                        .pitch = orient.y, .roll = orient.x, .yaw = orient.z,
+                        .accel_x = accel.x * 9.80665f, .accel_y = accel.y * 9.80665f, .accel_z = accel.z * 9.80665f,
+                        .gyro_x = gyro.x * (float)(M_PI / 180.0), .gyro_y = gyro.y * (float)(M_PI / 180.0), .gyro_z = gyro.z * (float)(M_PI / 180.0),
+                        .pitch = orient.y * (float)(180.0 / M_PI), .roll = orient.x * (float)(180.0 / M_PI), .yaw = orient.z * (float)(180.0 / M_PI),
                         .valid = true,
                     };
                     if (!self->imu_data_valid_) {
                         self->imu_data_valid_ = true;
-                        ESP_LOGI(TAG, "QMI8658 streaming OK: pitch=%.1f roll=%.1f", orient.y, orient.x);
+                        ESP_LOGI(TAG, "QMI8658 streaming OK: pitch=%.1f roll=%.1f",
+                                 (double)(orient.y * (float)(180.0 / M_PI)), (double)(orient.x * (float)(180.0 / M_PI)));
                     }
                 } else {
                     static int err_count = 0;

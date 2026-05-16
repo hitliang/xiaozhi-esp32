@@ -26,18 +26,18 @@ ESP-IDF v5.5.4 不支持系统安装的 CMake 4.x。`build.bat` 中必须将 ESP
 set PATH=%IDF_TOOLS_PATH%\tools\cmake\3.30.2\bin;%PATH%
 ```
 
-### 2. pyparsing 版本必须锁定为 3.1.x
+### 2. pyparsing 版本必须锁定
 
-pyparsing 3.2.x 会导致 `ldgen` 工具在解析 `.a` 文件时崩溃：
+IDF v5.5.4 要求 `pyparsing>=3.1.0,<3.3`。但实测：
+- `3.2.x` — 导致 `ldgen` 工具解析 `.a` 文件时 `IndexError`
+- `3.0.x` — 不满足 IDF 最低版本要求，`export.bat` 失败
+- `3.1.4` — **唯一验证可用的版本**（全量编译时 ldgen 可能仍报错，增量编译正常）
 
-```
-pyparsing.exceptions.ParseException: Expected 'In archive' (at char 0)
-```
-
-修复方法：
 ```bash
 pip install pyparsing==3.1.4
 ```
+
+如果全量编译（`fullclean`）遇到 ldgen 报错 `Expected 'In archive'`，再执行一次增量编译即可通过。
 
 ### 3. 必须显式设置 IDF_TARGET=esp32s3
 

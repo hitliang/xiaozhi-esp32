@@ -20,7 +20,7 @@ set PATH=%IDF_TOOLS_PATH%\tools\cmake\3.30.2\bin;%PATH%
 
 set IDF_TARGET=esp32s3
 
-call %IDF_PATH%\export.bat >nul 2>nul
+call %IDF_PATH%\export.bat >nul
 
 cd /d C:\code\esp32\xiaozhi-esp32
 
