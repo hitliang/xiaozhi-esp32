@@ -21,15 +21,15 @@ private:
     int current_step_ = 0;
     int selected_time_sig_ = 2;       // 0=2/4, 1=3/4, 2=4/4, 3=6/8
     int selected_subdivision_ = 0;    // 0=Std, 1=8th, 2=Triplet, 3=16th
-    bool voice_count_enabled_ = true;
+    int sound_type_ = 0;              // 0=Voice, 1=Click, 2=Piano
 
     // --- LVGL objects ---
     lv_obj_t* bpm_label_ = nullptr;
     lv_obj_t* bpm_slider_ = nullptr;
     lv_obj_t* play_btn_ = nullptr;
     lv_obj_t* play_label_ = nullptr;
-    lv_obj_t* voice_btn_ = nullptr;
-    lv_obj_t* voice_label_ = nullptr;
+    lv_obj_t* sound_btn_ = nullptr;
+    lv_obj_t* sound_label_ = nullptr;
     lv_obj_t* beat_container_ = nullptr;
     lv_obj_t* time_sig_btns_[4] = {};
     lv_obj_t* sub_btns_[4] = {};
@@ -46,13 +46,13 @@ private:
     void start();
     void stop();
     void doBeat();
-    void playDigitSound(int beat);
+    void playMetronomeSound(bool main_beat);
     void updateBpmDisplay();
     void updateBeatVisual();
     void updatePlayButton();
     void updateTimeSigButtons();
     void updateSubButtons();
-    void updateVoiceToggle();
+    void updateSoundButton();
     void rebuildBeatDots(int display_w);
     void setTimerPeriod();
     void recalculateSteps();
@@ -66,5 +66,5 @@ private:
     static void onPlayPause(lv_event_t* e);
     static void onTimeSig(lv_event_t* e);
     static void onSubdivision(lv_event_t* e);
-    static void onVoiceToggle(lv_event_t* e);
+    static void onSoundToggle(lv_event_t* e);
 };

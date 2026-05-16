@@ -2,6 +2,7 @@
 #include "display/lvgl_display/lvgl_theme.h"
 #include "application.h"
 #include "assets/lang_config.h"
+#include "boards/common/board.h"
 
 #include <esp_log.h>
 #include <algorithm>
@@ -44,7 +45,7 @@ void MetronomeApp::stop() {
     }
     is_playing_ = false;
     updatePlayButton();
-    // Reset all dots to outline
+    current_step_ = 0;
     for (auto* dot : beat_dots_) {
         lv_obj_set_style_bg_opa(dot, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_color(dot, lv_color_hex(0x444444), 0);
@@ -55,15 +56,7 @@ void MetronomeApp::stop() {
 
 void MetronomeApp::doBeat() {
     bool main = isMainBeat();
-    int bn = beatNumber();
-
-    if (voice_count_enabled_ && main) {
-        playDigitSound(bn);
-    } else if (main) {
-        Application::GetInstance().PlaySound(Lang::Sounds::OGG_POPUP);
-    }
-    // Subdivision beats: silent (visual only)
-
+    playMetronomeSound(main);
     updateBeatVisual();
 
     current_step_++;
@@ -72,18 +65,38 @@ void MetronomeApp::doBeat() {
     }
 }
 
-void MetronomeApp::playDigitSound(int beat) {
-    switch (beat) {
-        case 1: Application::GetInstance().PlaySound(Lang::Sounds::OGG_1); break;
-        case 2: Application::GetInstance().PlaySound(Lang::Sounds::OGG_2); break;
-        case 3: Application::GetInstance().PlaySound(Lang::Sounds::OGG_3); break;
-        case 4: Application::GetInstance().PlaySound(Lang::Sounds::OGG_4); break;
-        case 5: Application::GetInstance().PlaySound(Lang::Sounds::OGG_5); break;
-        case 6: Application::GetInstance().PlaySound(Lang::Sounds::OGG_6); break;
-        case 7: Application::GetInstance().PlaySound(Lang::Sounds::OGG_7); break;
-        case 8: Application::GetInstance().PlaySound(Lang::Sounds::OGG_8); break;
-        case 9: Application::GetInstance().PlaySound(Lang::Sounds::OGG_9); break;
-        default: Application::GetInstance().PlaySound(Lang::Sounds::OGG_POPUP); break;
+void MetronomeApp::playMetronomeSound(bool main_beat) {
+    auto& app = Application::GetInstance();
+
+    switch (sound_type_) {
+        case 0: { // Voice counting on main beats
+            if (main_beat) {
+                int bn = beatNumber();
+                switch (bn) {
+                    case 1: app.PlaySound(Lang::Sounds::OGG_1); break;
+                    case 2: app.PlaySound(Lang::Sounds::OGG_2); break;
+                    case 3: app.PlaySound(Lang::Sounds::OGG_3); break;
+                    case 4: app.PlaySound(Lang::Sounds::OGG_4); break;
+                    case 5: app.PlaySound(Lang::Sounds::OGG_5); break;
+                    case 6: app.PlaySound(Lang::Sounds::OGG_6); break;
+                    case 7: app.PlaySound(Lang::Sounds::OGG_7); break;
+                    case 8: app.PlaySound(Lang::Sounds::OGG_8); break;
+                    case 9: app.PlaySound(Lang::Sounds::OGG_9); break;
+                    default: app.PlaySound(Lang::Sounds::OGG_POPUP); break;
+                }
+            }
+            break;
+        }
+        case 1: { // Click — accent on main, light on subdivision
+            app.PlaySound(main_beat ? Lang::Sounds::OGG_POPUP
+                                    : Lang::Sounds::OGG_PIANO_5_C);
+            break;
+        }
+        case 2: { // Piano — high note on main, low on subdivision
+            app.PlaySound(main_beat ? Lang::Sounds::OGG_PIANO_5_C
+                                    : Lang::Sounds::OGG_PIANO_4_C);
+            break;
+        }
     }
 }
 
@@ -120,7 +133,6 @@ void MetronomeApp::onTimeSigClicked(int idx) {
     recalculateSteps();
     current_step_ = 0;
 
-    // Rebuild dots (need display width)
     auto* display = Board::GetInstance().GetDisplay();
     rebuildBeatDots(display->width());
     updateTimeSigButtons();
@@ -151,7 +163,11 @@ void MetronomeApp::adjustBpm(int delta) {
 
 void MetronomeApp::setTimerPeriod() {
     if (timer_) {
-        lv_timer_set_period(timer_, timerPeriodMs());
+        // lv_timer_set_period does not reset the internal counter,
+        // so the remaining old-period time would be added to the new beat.
+        // Recreate the timer to guarantee exact new period.
+        lv_timer_del(timer_);
+        timer_ = lv_timer_create(onTimerTick, timerPeriodMs(), this);
     }
 }
 
@@ -191,12 +207,14 @@ void MetronomeApp::updateSubButtons() {
     }
 }
 
-void MetronomeApp::updateVoiceToggle() {
-    if (voice_btn_) {
-        lv_obj_set_style_bg_color(voice_btn_,
-            voice_count_enabled_ ? lv_color_hex(0x2E7D32) : lv_color_hex(0x444444), 0);
-        lv_label_set_text(voice_label_, voice_count_enabled_ ? "ON" : "OFF");
-    }
+void MetronomeApp::updateSoundButton() {
+    if (!sound_btn_ || !sound_label_) return;
+    const char* names[] = {"Voice", "Click", "Piano"};
+    lv_label_set_text(sound_label_, names[sound_type_]);
+    lv_obj_set_style_bg_color(sound_btn_,
+        sound_type_ == 0 ? lv_color_hex(0x2E7D32) :
+        sound_type_ == 1 ? lv_color_hex(0x1565C0) :
+                           lv_color_hex(0x6A1B9A), 0);
 }
 
 // ======================== Beat Dots ========================
@@ -234,26 +252,21 @@ void MetronomeApp::updateBeatVisual() {
         auto* dot = beat_dots_[i];
         if (i == main_idx && main) {
             if (i == 0) {
-                // Downbeat: gold
                 lv_obj_set_style_bg_color(dot, lv_color_hex(0xFF9800), 0);
             } else {
-                // Other main beat: white
                 lv_obj_set_style_bg_color(dot, lv_color_white(), 0);
             }
             lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
             lv_obj_set_style_border_color(dot, lv_color_white(), 0);
         } else if (i == main_idx) {
-            // Subdivision of this beat: dim pulse
             lv_obj_set_style_bg_color(dot, lv_color_hex(0x666666), 0);
             lv_obj_set_style_bg_opa(dot, LV_OPA_50, 0);
             lv_obj_set_style_border_color(dot, lv_color_hex(0x666666), 0);
         } else if (i < main_idx) {
-            // Past beat: dim
             lv_obj_set_style_bg_color(dot, lv_color_hex(0x333333), 0);
             lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
             lv_obj_set_style_border_color(dot, lv_color_hex(0x555555), 0);
         } else {
-            // Future beat: outline
             lv_obj_set_style_bg_opa(dot, LV_OPA_TRANSP, 0);
             lv_obj_set_style_border_color(dot, lv_color_hex(0x444444), 0);
         }
@@ -271,7 +284,7 @@ void MetronomeApp::onSliderChanged(lv_event_t* e) {
 
 void MetronomeApp::onBpmButton(lv_event_t* e) {
     auto* self = static_cast<MetronomeApp*>(lv_event_get_user_data(e));
-    int delta = (int)(intptr_t)lv_event_get_user_data(e);
+    int delta = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target_obj(e));
     self->adjustBpm(delta);
 }
 
@@ -282,20 +295,20 @@ void MetronomeApp::onPlayPause(lv_event_t* e) {
 
 void MetronomeApp::onTimeSig(lv_event_t* e) {
     auto* self = static_cast<MetronomeApp*>(lv_event_get_user_data(e));
-    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    int idx = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target_obj(e));
     self->onTimeSigClicked(idx);
 }
 
 void MetronomeApp::onSubdivision(lv_event_t* e) {
     auto* self = static_cast<MetronomeApp*>(lv_event_get_user_data(e));
-    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    int idx = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target_obj(e));
     self->onSubdivisionClicked(idx);
 }
 
-void MetronomeApp::onVoiceToggle(lv_event_t* e) {
+void MetronomeApp::onSoundToggle(lv_event_t* e) {
     auto* self = static_cast<MetronomeApp*>(lv_event_get_user_data(e));
-    self->voice_count_enabled_ = !self->voice_count_enabled_;
-    self->updateVoiceToggle();
+    self->sound_type_ = (self->sound_type_ + 1) % 3;
+    self->updateSoundButton();
 }
 
 // ======================== OnEnter / OnExit ========================
@@ -305,6 +318,12 @@ void MetronomeApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
     auto* text_font = theme->text_font()->font();
     auto fg = lv_color_white();
     int w = ctx.display->width();
+
+    // Disable scrolling so touch events reach buttons
+    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+    lv_obj_set_style_pad_all(screen, 16, 0);
+    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(screen, LV_SCROLLBAR_MODE_OFF);
 
     // Title
     lv_obj_t* title = lv_label_create(screen);
@@ -360,7 +379,8 @@ void MetronomeApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
         lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(lbl, fg, 0);
         lv_obj_center(lbl);
-        lv_obj_add_event_cb(btn, onBpmButton, LV_EVENT_CLICKED, (void*)(intptr_t)delta);
+        lv_obj_set_user_data(btn, (void*)(intptr_t)delta);
+        lv_obj_add_event_cb(btn, onBpmButton, LV_EVENT_CLICKED, this);
     };
     make_adj_btn("-10", -10);
     make_adj_btn("-1", -1);
@@ -398,7 +418,8 @@ void MetronomeApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
         lv_label_set_text(lbl, ts_labels[i]);
         lv_obj_set_style_text_font(lbl, text_font, 0);
         lv_obj_center(lbl);
-        lv_obj_add_event_cb(btn, onTimeSig, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+        lv_obj_set_user_data(btn, (void*)(intptr_t)i);
+        lv_obj_add_event_cb(btn, onTimeSig, LV_EVENT_CLICKED, this);
         time_sig_btns_[i] = btn;
     }
     updateTimeSigButtons();
@@ -423,45 +444,38 @@ void MetronomeApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
         lv_label_set_text(lbl, sub_labels[i]);
         lv_obj_set_style_text_font(lbl, text_font, 0);
         lv_obj_center(lbl);
-        lv_obj_add_event_cb(btn, onSubdivision, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+        lv_obj_set_user_data(btn, (void*)(intptr_t)i);
+        lv_obj_add_event_cb(btn, onSubdivision, LV_EVENT_CLICKED, this);
         sub_btns_[i] = btn;
     }
     updateSubButtons();
 
-    // Voice toggle row
-    lv_obj_t* voice_row = lv_obj_create(screen);
-    lv_obj_set_size(voice_row, w - 32, 32);
-    lv_obj_set_style_bg_opa(voice_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(voice_row, 0, 0);
-    lv_obj_set_style_pad_all(voice_row, 0, 0);
-    lv_obj_set_flex_flow(voice_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(voice_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_align(voice_row, LV_ALIGN_TOP_MID, 0, 304);
+    // Sound type selector row
+    lv_obj_t* sound_row = lv_obj_create(screen);
+    lv_obj_set_size(sound_row, w - 32, 32);
+    lv_obj_set_style_bg_opa(sound_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(sound_row, 0, 0);
+    lv_obj_set_style_pad_all(sound_row, 0, 0);
+    lv_obj_set_flex_flow(sound_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(sound_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_align(sound_row, LV_ALIGN_TOP_MID, 0, 302);
 
-    lv_obj_t* voice_icon = lv_label_create(voice_row);
-    lv_label_set_text(voice_icon, "\xef\x80\x81 Voice:");
-    lv_obj_set_style_text_font(voice_icon, text_font, 0);
-    lv_obj_set_style_text_color(voice_icon, fg, 0);
+    lv_obj_t* sound_icon = lv_label_create(sound_row);
+    lv_label_set_text(sound_icon, "\xef\x80\x81 Sound:");
+    lv_obj_set_style_text_font(sound_icon, text_font, 0);
+    lv_obj_set_style_text_color(sound_icon, fg, 0);
 
-    voice_btn_ = lv_btn_create(voice_row);
-    lv_obj_set_size(voice_btn_, 56, 28);
-    lv_obj_set_style_radius(voice_btn_, 6, 0);
-    lv_obj_set_style_border_width(voice_btn_, 0, 0);
-    lv_obj_set_style_margin_left(voice_btn_, 12, 0);
-    voice_label_ = lv_label_create(voice_btn_);
-    lv_obj_set_style_text_font(voice_label_, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(voice_label_, fg, 0);
-    lv_obj_center(voice_label_);
-    lv_obj_add_event_cb(voice_btn_, onVoiceToggle, LV_EVENT_CLICKED, this);
-    updateVoiceToggle();
-
-    // Spacer
-    lv_obj_t* spacer = lv_obj_create(screen);
-    lv_obj_set_style_bg_opa(spacer, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(spacer, 0, 0);
-    lv_obj_set_style_pad_all(spacer, 0, 0);
-    lv_obj_align(spacer, LV_ALIGN_TOP_MID, 0, 336);
-    lv_obj_set_size(spacer, w, 30);
+    sound_btn_ = lv_btn_create(sound_row);
+    lv_obj_set_size(sound_btn_, 72, 28);
+    lv_obj_set_style_radius(sound_btn_, 6, 0);
+    lv_obj_set_style_border_width(sound_btn_, 0, 0);
+    lv_obj_set_style_margin_left(sound_btn_, 12, 0);
+    sound_label_ = lv_label_create(sound_btn_);
+    lv_obj_set_style_text_font(sound_label_, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(sound_label_, fg, 0);
+    lv_obj_center(sound_label_);
+    lv_obj_add_event_cb(sound_btn_, onSoundToggle, LV_EVENT_CLICKED, this);
+    updateSoundButton();
 
     // Play/Stop button
     play_btn_ = lv_btn_create(screen);

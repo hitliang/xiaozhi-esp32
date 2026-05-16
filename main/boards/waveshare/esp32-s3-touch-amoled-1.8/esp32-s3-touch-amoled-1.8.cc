@@ -538,6 +538,10 @@ public:
         InitializeCodecI2c();
         InitializeTca9554();
         InitializeAxp2101();
+        // Disable power save if charging at boot
+        if (pmic_->IsCharging()) {
+            power_save_timer_->SetEnabled(false);
+        }
         InitializeSpi();
         InitializeSH8601Display();
         InitializeTouch();
