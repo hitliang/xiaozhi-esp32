@@ -3,6 +3,7 @@
 #include "../app.h"
 #include <font_awesome.h>
 
+class BallPhysicsView;
 class BallPhysicsApp : public App {
 public:
     const char* GetName() const override { return "Ball"; }
@@ -10,4 +11,8 @@ public:
 
     void OnEnter(AppContext& ctx, lv_obj_t* screen) override;
     void OnExit() override;
+    bool OnUpdate() override;
+
+private:
+    BallPhysicsView* view_ = nullptr;
 };
