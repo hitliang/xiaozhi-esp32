@@ -137,6 +137,8 @@ void BallPhysicsApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
     auto* theme = static_cast<LvglTheme*>(ctx.display->GetTheme());
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x000000), 0);
     lv_obj_set_style_pad_all(screen, 0, 0);
+    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(screen, LV_SCROLLBAR_MODE_OFF);
 
     view_ = new BallPhysicsView(screen, theme, ctx.display);
     ESP_LOGI(TAG, "Ball physics entered");
