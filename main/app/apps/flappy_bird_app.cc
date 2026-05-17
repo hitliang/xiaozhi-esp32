@@ -3,12 +3,36 @@
 #include "display/display.h"
 #include "application.h"
 #include "assets/lang_config.h"
+#include "settings.h"
 
 #include <esp_log.h>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 
 #define TAG "FlappyBird"
+
+#define NVS_NS         "flappy"
+#define KEY_HIGH_SCORE "high_score"
+#define KEY_PLAY_COUNT "play_count"
+#define KEY_PLAY_DATE  "play_date"
+#define DAILY_LIMIT    10
+
+static int GetTodayInt() {
+    time_t now = time(nullptr);
+    struct tm* tm = localtime(&now);
+    return (tm->tm_year + 1900) * 10000 + (tm->tm_mon + 1) * 100 + tm->tm_mday;
+}
+
+bool FlappyBirdApp::CanEnter() const {
+    Settings nvs(NVS_NS, true);
+    int play_date = nvs.GetInt(KEY_PLAY_DATE, 0);
+    int play_count = nvs.GetInt(KEY_PLAY_COUNT, 0);
+    int today = GetTodayInt();
+
+    if (play_date != today) return true;  // new day, reset
+    return play_count < DAILY_LIMIT;
+}
 
 // Game constants
 #define GRAVITY      1100.0f
@@ -135,6 +159,12 @@ public:
         // Game loop at 30fps
         timer_ = lv_timer_create(onTimer, (uint32_t)(FRAME_DT * 1000), this);
 
+        // Load persisted high score
+        {
+            Settings nvs(NVS_NS, true);
+            high_score_ = nvs.GetInt(KEY_HIGH_SCORE, 0);
+        }
+
         ResetGame();
     }
 
@@ -168,6 +198,7 @@ private:
     enum State { IDLE, PLAYING, DEAD };
     State state_ = IDLE;
     int score_ = 0;
+    int high_score_ = 0;
     float spawn_counter_ = 0;
 
     int GroundY() const { return scr_h_ - GROUND_H; }
@@ -191,7 +222,11 @@ private:
 
         UpdateBirdVis();
         lv_label_set_text(score_label_, "0");
-        lv_label_set_text(msg_label_, "Tap to Start");
+        if (high_score_ > 0) {
+            lv_label_set_text_fmt(msg_label_, "Tap to Start\nBest: %d", high_score_);
+        } else {
+            lv_label_set_text(msg_label_, "Tap to Start");
+        }
         lv_obj_clear_flag(msg_label_, LV_OBJ_FLAG_HIDDEN);
     }
 
@@ -203,15 +238,37 @@ private:
         state_ = PLAYING;
         lv_obj_add_flag(msg_label_, LV_OBJ_FLAG_HIDDEN);
         Flap();
+
+        // Increment daily play count
+        {
+            Settings nvs(NVS_NS, true);
+            int today = GetTodayInt();
+            int date = nvs.GetInt(KEY_PLAY_DATE, 0);
+            int count = (date == today) ? nvs.GetInt(KEY_PLAY_COUNT, 0) : 0;
+            nvs.SetInt(KEY_PLAY_DATE, today);
+            nvs.SetInt(KEY_PLAY_COUNT, count + 1);
+        }
+
         ESP_LOGI(TAG, "Game started");
     }
 
     void GameOver() {
         state_ = DEAD;
-        lv_label_set_text(msg_label_, "Game Over\nTap to Retry");
+
+        // Check high score
+        if (score_ > high_score_) {
+            high_score_ = score_;
+            Settings nvs(NVS_NS, true);
+            nvs.SetInt(KEY_HIGH_SCORE, high_score_);
+            lv_label_set_text_fmt(msg_label_, "New High Score!\n%d\nTap to Retry", score_);
+            Application::GetInstance().PlaySound(Lang::Sounds::OGG_SUCCESS);
+            ESP_LOGI(TAG, "New high score: %d", score_);
+        } else {
+            lv_label_set_text_fmt(msg_label_, "Game Over\nScore: %d  Best: %d\nTap to Retry", score_, high_score_);
+            Application::GetInstance().PlaySound(Lang::Sounds::OGG_VIBRATION);
+        }
         lv_obj_clear_flag(msg_label_, LV_OBJ_FLAG_HIDDEN);
-        Application::GetInstance().PlaySound(Lang::Sounds::OGG_VIBRATION);
-        ESP_LOGI(TAG, "Game over, score=%d", score_);
+        ESP_LOGI(TAG, "Game over, score=%d, high=%d", score_, high_score_);
     }
 
     void Flap() {

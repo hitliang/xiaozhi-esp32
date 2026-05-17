@@ -37,4 +37,8 @@ public:
     // Swipe gesture from touch screen.
     // direction: 0=left, 1=right, 2=up, 3=down
     virtual void OnSwipeEvent(int direction) {}
+
+    // Check if the app can be entered (e.g. daily limit not exceeded).
+    // Default true; override to restrict entry.
+    virtual bool CanEnter() const { return true; }
 };

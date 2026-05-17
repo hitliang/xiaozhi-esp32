@@ -535,6 +535,14 @@ void AppManager::ProcessPendingSwitch() {
         return;
     }
 
+    if (!target_app->CanEnter()) {
+        auto* board_display = Board::GetInstance().GetDisplay();
+        board_display->ShowNotification("Daily limit reached, try again tomorrow", 3000);
+        ESP_LOGW(TAG, "App '%s' blocked by CanEnter()", pending_switch_id_.c_str());
+        ShowHome();
+        return;
+    }
+
     // Create a new screen for the app
     app_screen_ = lv_obj_create(nullptr);
     lv_obj_set_size(app_screen_, display->width(), display->height());

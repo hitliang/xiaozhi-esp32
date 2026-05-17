@@ -15,7 +15,6 @@
 #include "app/apps/weather_app.h"
 #include "app/apps/attitude_app.h"
 #include "app/apps/ball_physics_app.h"
-#include "app/apps/snake_app.h"
 #include "app/apps/metronome_app.h"
 #include "app/apps/ear_trainer_app.h"
 #include "app/apps/flappy_bird_app.h"
@@ -105,10 +104,9 @@ void Application::Initialize() {
         mgr.RegisterApp("weather", std::make_unique<WeatherApp>());
         mgr.RegisterApp("attitude", std::make_unique<AttitudeApp>());
         mgr.RegisterApp("ball_physics", std::make_unique<BallPhysicsApp>());
-        mgr.RegisterApp("snake", std::make_unique<SnakeApp>());
         mgr.RegisterApp("metronome", std::make_unique<MetronomeApp>());
         mgr.RegisterApp("ear_trainer", std::make_unique<EarTrainerApp>());
-        mgr.RegisterApp("flappy_bird", std::make_unique<FlappyBirdApp>());
+        // mgr.RegisterApp("flappy_bird", std::make_unique<FlappyBirdApp>());
 
         // Now populate grid tiles with registered apps
         mgr.PopulateGridTiles();
