@@ -750,6 +750,12 @@ void Application::StopListening() {
     xEventGroupSetBits(event_group_, MAIN_EVENT_STOP_LISTENING);
 }
 
+void Application::CloseAudioChannel() {
+    if (protocol_) {
+        protocol_->CloseAudioChannel();
+    }
+}
+
 void Application::HandleToggleChatEvent() {
     auto state = GetDeviceState();
     

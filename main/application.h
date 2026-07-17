@@ -105,6 +105,12 @@ public:
      */
     void StopListening();
 
+    /**
+     * Close the current voice channel immediately.
+     * This is intended for app lifecycle callbacks running in the main task.
+     */
+    void CloseAudioChannel();
+
     void Reboot();
     void WakeWordInvoke(const std::string& wake_word);
     bool UpgradeFirmware(const std::string& url, const std::string& version = "");
