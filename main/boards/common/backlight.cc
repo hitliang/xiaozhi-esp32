@@ -48,23 +48,26 @@ void Backlight::SetBrightness(uint8_t brightness, bool permanent) {
         brightness = 100;
     }
 
-    if (brightness_ == brightness) {
-        return;
-    }
-
+    // Persist first: a live preview may already have reached the requested value.
     if (permanent) {
         Settings settings("display", true);
         settings.SetInt("brightness", brightness);
     }
 
+    if (brightness_ == brightness && target_brightness_ == brightness) {
+        return;
+    }
+
     target_brightness_ = brightness;
     step_ = (target_brightness_ > brightness_) ? 1 : -1;
 
-    if (transition_timer_ != nullptr) {
-        // 启动定时器，每 5ms 更新一次
-        esp_timer_start_periodic(transition_timer_, 5 * 1000);
+    if (transition_timer_ != nullptr && !esp_timer_is_active(transition_timer_)) {
+        const esp_err_t error = esp_timer_start_periodic(transition_timer_, 5 * 1000);
+        if (error != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to start brightness transition: %s", esp_err_to_name(error));
+        }
     }
-    ESP_LOGI(TAG, "Set brightness to %d", brightness);
+    ESP_LOGI(TAG, "Set brightness to %d%s", brightness, permanent ? " (saved)" : "");
 }
 
 void Backlight::OnTransitionTimer() {

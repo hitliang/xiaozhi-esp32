@@ -18,6 +18,21 @@
 
 #define TAG "LcdDisplay"
 
+static lv_obj_t* CreateEmotionShape(lv_obj_t* parent, int x, int y, int width, int height,
+                                    uint32_t color, int radius) {
+    auto* object = lv_obj_create(parent);
+    lv_obj_set_pos(object, x, y);
+    lv_obj_set_size(object, width, height);
+    lv_obj_set_style_radius(object, radius, 0);
+    lv_obj_set_style_bg_color(object, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(object, 0, 0);
+    lv_obj_set_style_pad_all(object, 0, 0);
+    lv_obj_clear_flag(object, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(object, LV_OBJ_FLAG_CLICKABLE);
+    return object;
+}
+
 LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
 LV_FONT_DECLARE(BUILTIN_ICON_FONT);
 LV_FONT_DECLARE(font_awesome_30_4);
@@ -294,6 +309,14 @@ LcdDisplay::~LcdDisplay() {
         esp_timer_stop(preview_timer_);
         esp_timer_delete(preview_timer_);
     }
+    if (emotion_timer_ != nullptr) {
+        lv_timer_delete(emotion_timer_);
+        emotion_timer_ = nullptr;
+    }
+    if (emotion_overlay_ != nullptr) {
+        lv_obj_del(emotion_overlay_);
+        emotion_overlay_ = nullptr;
+    }
 
     if (preview_image_ != nullptr) {
         lv_obj_del(preview_image_);
@@ -346,6 +369,312 @@ bool LcdDisplay::Lock(int timeout_ms) {
 
 void LcdDisplay::Unlock() {
     lvgl_port_unlock();
+}
+
+void LcdDisplay::CreateLargeEmotionUI(lv_obj_t* screen) {
+    if (emotion_overlay_ != nullptr || screen == nullptr) return;
+
+    emotion_overlay_ = lv_obj_create(screen);
+    lv_obj_set_pos(emotion_overlay_, 0, 0);
+    lv_obj_set_size(emotion_overlay_, width_, height_);
+    lv_obj_set_style_radius(emotion_overlay_, 0, 0);
+    lv_obj_set_style_bg_color(emotion_overlay_, lv_color_hex(0x02050A), 0);
+    lv_obj_set_style_bg_grad_color(emotion_overlay_, lv_color_hex(0x071522), 0);
+    lv_obj_set_style_bg_grad_dir(emotion_overlay_, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_bg_opa(emotion_overlay_, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(emotion_overlay_, 0, 0);
+    lv_obj_set_style_pad_all(emotion_overlay_, 0, 0);
+    lv_obj_clear_flag(emotion_overlay_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(emotion_overlay_, LV_OBJ_FLAG_CLICKABLE);
+
+    const int min_dimension = std::min(width_, height_);
+    int face_width = std::min(std::max(80, width_ - 40), min_dimension * 74 / 100);
+    int face_height = std::min(std::max(72, height_ - 96), face_width * 9 / 10);
+    face_width = std::min(face_width, face_height * 10 / 9);
+    const int face_x = (width_ - face_width) / 2;
+    const int face_y = (height_ - face_height) / 2 - 4;
+
+    const int glow_size = std::min(std::min(width_, height_), face_width + 86);
+    emotion_glow_ = CreateEmotionShape(emotion_overlay_,
+                                       (width_ - glow_size) / 2,
+                                       face_y + (face_height - glow_size) / 2,
+                                       glow_size, glow_size, 0x59D9FF, LV_RADIUS_CIRCLE);
+    lv_obj_set_style_bg_opa(emotion_glow_, LV_OPA_10, 0);
+
+    const int ring_size = std::min(std::min(width_ - 8, height_ - 8), face_width + 34);
+    emotion_ring_ = CreateEmotionShape(emotion_overlay_,
+                                       (width_ - ring_size) / 2,
+                                       face_y + (face_height - ring_size) / 2,
+                                       ring_size, ring_size, 0x000000, LV_RADIUS_CIRCLE);
+    lv_obj_set_style_bg_opa(emotion_ring_, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(emotion_ring_, 2, 0);
+    lv_obj_set_style_border_color(emotion_ring_, lv_color_hex(0x59D9FF), 0);
+    lv_obj_set_style_border_opa(emotion_ring_, LV_OPA_20, 0);
+
+    emotion_face_ = CreateEmotionShape(emotion_overlay_, face_x, face_y, face_width, face_height,
+                                       0x091421, std::max(24, face_width * 28 / 100));
+    lv_obj_set_style_bg_grad_color(emotion_face_, lv_color_hex(0x12283E), 0);
+    lv_obj_set_style_bg_grad_dir(emotion_face_, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_border_width(emotion_face_, 2, 0);
+    lv_obj_set_style_border_color(emotion_face_, lv_color_hex(0x59D9FF), 0);
+    lv_obj_set_style_border_opa(emotion_face_, LV_OPA_40, 0);
+    lv_obj_set_style_shadow_color(emotion_face_, lv_color_hex(0x59D9FF), 0);
+    lv_obj_set_style_shadow_width(emotion_face_, 18, 0);
+    lv_obj_set_style_shadow_opa(emotion_face_, LV_OPA_20, 0);
+
+    const int eye_width = std::max(8, face_width * 16 / 100);
+    const int eye_height = std::max(12, face_height * 26 / 100);
+    const int eye_y = face_height * 28 / 100;
+    emotion_left_eye_ = CreateEmotionShape(emotion_face_, face_width * 22 / 100, eye_y,
+                                           eye_width, eye_height, 0x59D9FF, LV_RADIUS_CIRCLE);
+    emotion_right_eye_ = CreateEmotionShape(emotion_face_, face_width * 62 / 100, eye_y,
+                                            eye_width, eye_height, 0x59D9FF, LV_RADIUS_CIRCLE);
+
+    emotion_left_brow_ = CreateEmotionShape(emotion_face_, face_width * 20 / 100, face_height * 18 / 100,
+                                            face_width * 20 / 100, std::max(4, face_height * 3 / 100),
+                                            0x59D9FF, LV_RADIUS_CIRCLE);
+    emotion_right_brow_ = CreateEmotionShape(emotion_face_, face_width * 60 / 100, face_height * 18 / 100,
+                                             face_width * 20 / 100, std::max(4, face_height * 3 / 100),
+                                             0x59D9FF, LV_RADIUS_CIRCLE);
+    lv_obj_add_flag(emotion_left_brow_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
+
+    emotion_mouth_ = CreateEmotionShape(emotion_face_, face_width * 36 / 100, face_height * 68 / 100,
+                                        face_width * 28 / 100, std::max(7, face_height * 6 / 100),
+                                        0x59D9FF, LV_RADIUS_CIRCLE);
+
+    emotion_left_cheek_ = CreateEmotionShape(emotion_face_, face_width * 15 / 100, face_height * 57 / 100,
+                                             face_width * 12 / 100, std::max(5, face_height * 5 / 100),
+                                             0xFF83B5, LV_RADIUS_CIRCLE);
+    emotion_right_cheek_ = CreateEmotionShape(emotion_face_, face_width * 73 / 100, face_height * 57 / 100,
+                                              face_width * 12 / 100, std::max(5, face_height * 5 / 100),
+                                              0xFF83B5, LV_RADIUS_CIRCLE);
+    lv_obj_add_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(emotion_right_cheek_, LV_OBJ_FLAG_HIDDEN);
+
+    const int dot_size = std::max(5, face_width * 2 / 100);
+    const int dots_y = std::min(height_ - dot_size - 8, face_y + face_height + 20);
+    for (int index = 0; index < 3; ++index) {
+        emotion_dots_[index] = CreateEmotionShape(
+            emotion_overlay_, width_ / 2 - dot_size / 2 + (index - 1) * (dot_size + 12),
+            dots_y, dot_size, dot_size, 0x59D9FF, LV_RADIUS_CIRCLE);
+        lv_obj_add_flag(emotion_dots_[index], LV_OBJ_FLAG_HIDDEN);
+    }
+
+    lv_obj_add_flag(emotion_overlay_, LV_OBJ_FLAG_HIDDEN);
+    emotion_timer_ = lv_timer_create(EmotionTimerCallback, 80, this);
+    lv_timer_pause(emotion_timer_);
+}
+
+void LcdDisplay::EmotionTimerCallback(lv_timer_t* timer) {
+    auto* display = static_cast<LcdDisplay*>(lv_timer_get_user_data(timer));
+    if (display != nullptr) display->UpdateLargeEmotionFrame();
+}
+
+void LcdDisplay::ApplyLargeEmotionLocked(const char* emotion) {
+    if (emotion_overlay_ == nullptr) return;
+
+    large_emotion_ = (emotion != nullptr && emotion[0] != '\0') ? emotion : "neutral";
+    const auto& value = large_emotion_;
+
+    if (value == "happy" || value == "laughing" || value == "funny" ||
+        value == "delicious" || value == "confident" || value == "relaxed") {
+        emotion_accent_color_ = 0xFFD36A;
+    } else if (value == "loving" || value == "kissy" || value == "embarrassed") {
+        emotion_accent_color_ = 0xFF83B5;
+    } else if (value == "sad" || value == "crying" || value == "sleepy") {
+        emotion_accent_color_ = 0x73A9FF;
+    } else if (value == "angry") {
+        emotion_accent_color_ = 0xFF725E;
+    } else if (value == "thinking" || value == "confused") {
+        emotion_accent_color_ = 0xAA8BFF;
+    } else if (value == "surprised" || value == "shocked") {
+        emotion_accent_color_ = 0x66E4CF;
+    } else {
+        emotion_accent_color_ = 0x59D9FF;
+    }
+
+    const auto accent = lv_color_hex(emotion_accent_color_);
+    lv_obj_set_style_bg_color(emotion_glow_, accent, 0);
+    lv_obj_set_style_border_color(emotion_ring_, accent, 0);
+    lv_obj_set_style_border_color(emotion_face_, accent, 0);
+    lv_obj_set_style_shadow_color(emotion_face_, accent, 0);
+    emotion_frame_ = 0;
+    UpdateLargeEmotionFrame();
+}
+
+void LcdDisplay::UpdateLargeEmotionFrame() {
+    if (!emotion_large_ || emotion_overlay_ == nullptr ||
+        lv_obj_has_flag(emotion_overlay_, LV_OBJ_FLAG_HIDDEN)) {
+        return;
+    }
+
+    ++emotion_frame_;
+    const int face_width = lv_obj_get_width(emotion_face_);
+    const int face_height = lv_obj_get_height(emotion_face_);
+    const auto accent = lv_color_hex(emotion_accent_color_);
+    const auto& value = large_emotion_;
+
+    const bool positive = value == "happy" || value == "laughing" || value == "funny" ||
+                          value == "loving" || value == "kissy" || value == "embarrassed" ||
+                          value == "delicious" || value == "confident" || value == "relaxed";
+    const bool sad = value == "sad" || value == "crying";
+    const bool angry = value == "angry";
+    const bool surprised = value == "surprised" || value == "shocked";
+    const bool thinking = value == "thinking" || value == "confused" || value == "listening";
+    const bool sleepy = value == "sleepy";
+    const bool winking = value == "winking";
+    const bool speaking = conversation_visual_state_ == ConversationVisualState::Speaking;
+    const bool listening = conversation_visual_state_ == ConversationVisualState::Listening;
+    const bool connecting = conversation_visual_state_ == ConversationVisualState::Connecting;
+
+    static const uint8_t pulse_steps[] = {0, 2, 4, 6, 8, 6, 4, 2};
+    const int pulse = pulse_steps[emotion_frame_ % (sizeof(pulse_steps) / sizeof(pulse_steps[0]))];
+    const int ring_size = std::min(std::min(width_ - 8, height_ - 8), face_width + 34 + pulse);
+    lv_obj_set_size(emotion_ring_, ring_size, ring_size);
+    lv_obj_align(emotion_ring_, LV_ALIGN_CENTER, 0, -4);
+    lv_obj_set_style_border_opa(emotion_ring_, static_cast<lv_opa_t>(36 + pulse * 5), 0);
+
+    lv_obj_set_style_bg_color(emotion_left_eye_, accent, 0);
+    lv_obj_set_style_bg_color(emotion_right_eye_, accent, 0);
+    lv_obj_set_style_bg_color(emotion_mouth_, accent, 0);
+    lv_obj_set_style_bg_color(emotion_left_brow_, accent, 0);
+    lv_obj_set_style_bg_color(emotion_right_brow_, accent, 0);
+    lv_obj_set_style_shadow_color(emotion_left_eye_, accent, 0);
+    lv_obj_set_style_shadow_color(emotion_right_eye_, accent, 0);
+    lv_obj_set_style_shadow_width(emotion_left_eye_, 12, 0);
+    lv_obj_set_style_shadow_width(emotion_right_eye_, 12, 0);
+    lv_obj_set_style_shadow_opa(emotion_left_eye_, LV_OPA_30, 0);
+    lv_obj_set_style_shadow_opa(emotion_right_eye_, LV_OPA_30, 0);
+
+    lv_obj_add_flag(emotion_left_brow_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(emotion_right_cheek_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_transform_rotation(emotion_left_brow_, 0, 0);
+    lv_obj_set_style_transform_rotation(emotion_right_brow_, 0, 0);
+
+    auto place = [](lv_obj_t* object, int x, int y, int width, int height) {
+        width = std::max(4, width);
+        height = std::max(4, height);
+        lv_obj_set_pos(object, x, y);
+        lv_obj_set_size(object, width, height);
+        lv_obj_set_style_radius(object, std::min(width, height) / 2, 0);
+    };
+
+    int eye_width = face_width * 16 / 100;
+    int eye_height = face_height * 26 / 100;
+    int eye_y = face_height * 28 / 100;
+    int left_eye_x = face_width * 22 / 100;
+    int right_eye_x = face_width * 62 / 100;
+    int mouth_width = face_width * 28 / 100;
+    int mouth_height = face_height * 6 / 100;
+    int mouth_y = face_height * 68 / 100;
+
+    if (positive) {
+        eye_width = face_width * 18 / 100;
+        eye_height = face_height * 7 / 100;
+        eye_y = face_height * 36 / 100;
+        left_eye_x = face_width * 20 / 100;
+        right_eye_x = face_width * 62 / 100;
+        mouth_width = face_width * 32 / 100;
+        mouth_height = face_height * 11 / 100;
+        mouth_y = face_height * 64 / 100;
+        lv_obj_remove_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(emotion_right_cheek_, LV_OBJ_FLAG_HIDDEN);
+    } else if (sad) {
+        eye_height = face_height * 18 / 100;
+        eye_y = face_height * 34 / 100;
+        mouth_width = face_width * 22 / 100;
+        mouth_height = face_height * 5 / 100;
+        mouth_y = face_height * 73 / 100;
+        lv_obj_remove_flag(emotion_left_brow_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_transform_rotation(emotion_left_brow_, -140, 0);
+        lv_obj_set_style_transform_rotation(emotion_right_brow_, 140, 0);
+    } else if (angry) {
+        eye_width = face_width * 19 / 100;
+        eye_height = face_height * 13 / 100;
+        eye_y = face_height * 34 / 100;
+        mouth_width = face_width * 30 / 100;
+        mouth_height = face_height * 6 / 100;
+        mouth_y = face_height * 71 / 100;
+        lv_obj_remove_flag(emotion_left_brow_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_transform_rotation(emotion_left_brow_, 160, 0);
+        lv_obj_set_style_transform_rotation(emotion_right_brow_, -160, 0);
+    } else if (surprised) {
+        eye_width = face_width * 18 / 100;
+        eye_height = face_height * 30 / 100;
+        eye_y = face_height * 25 / 100;
+        left_eye_x = face_width * 21 / 100;
+        right_eye_x = face_width * 61 / 100;
+        mouth_width = face_width * 16 / 100;
+        mouth_height = face_height * 18 / 100;
+        mouth_y = face_height * 65 / 100;
+    } else if (thinking) {
+        eye_height = face_height * 23 / 100;
+        eye_y = face_height * 29 / 100;
+        mouth_width = face_width * 18 / 100;
+        mouth_height = face_height * 5 / 100;
+        mouth_y = face_height * 69 / 100;
+        lv_obj_remove_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_transform_rotation(emotion_right_brow_, -120, 0);
+    } else if (sleepy) {
+        eye_width = face_width * 18 / 100;
+        eye_height = face_height * 3 / 100;
+        eye_y = face_height * 39 / 100;
+        mouth_width = face_width * 20 / 100;
+        mouth_height = face_height * 4 / 100;
+        mouth_y = face_height * 70 / 100;
+    } else if (winking) {
+        eye_height = face_height * 24 / 100;
+    }
+
+    const bool blink = !positive && !sad && !angry && !surprised && !sleepy &&
+                       !winking && emotion_frame_ % 54 < 2;
+    if (blink) eye_height = face_height * 3 / 100;
+
+    place(emotion_left_eye_, left_eye_x, eye_y, eye_width, eye_height);
+    place(emotion_right_eye_, right_eye_x,
+          (thinking && !blink) ? face_height * 34 / 100 : eye_y,
+          thinking ? face_width * 13 / 100 : eye_width,
+          (winking && !blink) ? face_height * 3 / 100 :
+          (thinking && !blink ? face_height * 14 / 100 : eye_height));
+
+    if (speaking) {
+        static const uint8_t mouth_steps[] = {6, 13, 20, 10, 17, 7, 15, 19};
+        mouth_width = face_width * 29 / 100;
+        mouth_height = face_height * mouth_steps[emotion_frame_ %
+            (sizeof(mouth_steps) / sizeof(mouth_steps[0]))] / 100;
+        mouth_y = face_height * 66 / 100 - mouth_height / 4;
+    }
+    place(emotion_mouth_, (face_width - mouth_width) / 2, mouth_y, mouth_width, mouth_height);
+
+    const bool show_activity = listening || connecting || speaking;
+    const int dot_size = std::max(5, face_width * 2 / 100);
+    const int face_bottom = lv_obj_get_y(emotion_face_) + face_height;
+    const int dots_y = std::min(height_ - 14, face_bottom + 18);
+    for (int index = 0; index < 3; ++index) {
+        auto* dot = emotion_dots_[index];
+        if (!show_activity) {
+            lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
+        lv_obj_remove_flag(dot, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(dot, accent, 0);
+        if (speaking) {
+            lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+            const int bar_height = dot_size + ((emotion_frame_ + index * 2) % 5) * 3;
+            place(dot, width_ / 2 - dot_size / 2 + (index - 1) * (dot_size + 12),
+                  dots_y - bar_height / 2, dot_size, bar_height);
+        } else {
+            place(dot, width_ / 2 - dot_size / 2 + (index - 1) * (dot_size + 12),
+                  dots_y, dot_size, dot_size);
+            const int opacity = 55 + static_cast<int>((emotion_frame_ + index * 2) % 6) * 30;
+            lv_obj_set_style_bg_opa(dot, static_cast<lv_opa_t>(opacity), 0);
+        }
+    }
 }
 
 #if CONFIG_USE_WECHAT_MESSAGE_STYLE
@@ -493,6 +822,9 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_font(emoji_label_, large_icon_font, 0);
     lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
     lv_label_set_text(emoji_label_, FONT_AWESOME_MICROCHIP_AI);
+
+    CreateLargeEmotionUI(screen);
+    lv_obj_move_foreground(low_battery_popup_);
 }
 #if CONFIG_IDF_TARGET_ESP32P4
 #define  MAX_MESSAGES 40
@@ -504,13 +836,14 @@ void LcdDisplay::SetChatMessage(const char* role, const char* content) {
         ESP_LOGW(TAG, "SetChatMessage('%s', '%s') called before SetupUI() - message will be lost!", role, content);
     }
     DisplayLockGuard lock(this);
+    if (hide_subtitle_) return;
     if (content_ == nullptr) {
         if (setup_ui_called_) {
             ESP_LOGW(TAG, "SetChatMessage('%s', '%s') failed: content_ is nullptr (SetupUI() was called but container not created)", role, content);
         }
         return;
     }
-    
+
     // Check if message count exceeds limit
     uint32_t child_count = lv_obj_get_child_cnt(content_);
     if (child_count >= MAX_MESSAGES) {
@@ -990,6 +1323,9 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+
+    CreateLargeEmotionUI(screen);
+    lv_obj_move_foreground(low_battery_popup_);
 }
 
 void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
@@ -1080,6 +1416,19 @@ void LcdDisplay::SetEmotion(const char* emotion) {
         return;
     }
 
+    // Save the LLM emotion for status-driven display
+    // Don't save state-driven emotions (thinking, neutral) - only save LLM emotions
+    if (emotion && emotion[0] && strcmp(emotion, "thinking") != 0 &&
+        strcmp(emotion, "neutral") != 0 && strcmp(emotion, "listening") != 0) {
+        last_llm_emotion_ = emotion;
+    }
+
+    if (emotion_large_) {
+        DisplayLockGuard lock(this);
+        ApplyLargeEmotionLocked(emotion);
+        return;
+    }
+
     auto emoji_collection = static_cast<LvglTheme*>(current_theme_)->emoji_collection();
     auto image = emoji_collection != nullptr ? emoji_collection->GetEmojiImage(emotion) : nullptr;
     if (image == nullptr) {
@@ -1093,6 +1442,15 @@ void LcdDisplay::SetEmotion(const char* emotion) {
             lv_label_set_text(emoji_label_, utf8);
             lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+
+            // Apply large mode scaling for text emoji
+            if (emotion_large_) {
+                lv_obj_set_style_transform_scale_x(emoji_label_, 256 * 3, 0);
+                lv_obj_set_style_transform_scale_y(emoji_label_, 256 * 3, 0);
+            } else {
+                lv_obj_set_style_transform_scale_x(emoji_label_, 256, 0);
+                lv_obj_set_style_transform_scale_y(emoji_label_, 256, 0);
+            }
         }
         return;
     }
@@ -1117,10 +1475,22 @@ void LcdDisplay::SetEmotion(const char* emotion) {
             // Set initial frame and start animation
             lv_image_set_src(emoji_image_, gif_controller_->image_dsc());
             gif_controller_->Start();
-            
+
             // Show GIF, hide others
             lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
             lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+
+            // Apply large mode scaling if enabled
+            if (emotion_large_) {
+                auto* img_dsc = gif_controller_->image_dsc();
+                if (img_dsc != nullptr && img_dsc->header.w > 0 && img_dsc->header.h > 0) {
+                    int target = std::min(width_, height_) * 8 / 10;
+                    int scale = 256 * target / std::max(img_dsc->header.w, img_dsc->header.h);
+                    lv_image_set_scale(emoji_image_, scale);
+                }
+            } else {
+                lv_image_set_scale(emoji_image_, 256);
+            }
         } else {
             ESP_LOGE(TAG, "Failed to load GIF for emotion: %s", emotion);
             gif_controller_.reset();
@@ -1129,6 +1499,18 @@ void LcdDisplay::SetEmotion(const char* emotion) {
         lv_image_set_src(emoji_image_, image->image_dsc());
         lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+
+        // Apply large mode scaling if enabled
+        if (emotion_large_) {
+            auto* img_dsc = image->image_dsc();
+            if (img_dsc != nullptr && img_dsc->header.w > 0 && img_dsc->header.h > 0) {
+                int target = std::min(width_, height_) * 8 / 10;
+                int scale = 256 * target / std::max(img_dsc->header.w, img_dsc->header.h);
+                lv_image_set_scale(emoji_image_, scale);
+            }
+        } else {
+            lv_image_set_scale(emoji_image_, 256);
+        }
     }
 
 #if CONFIG_USE_WECHAT_MESSAGE_STYLE
@@ -1145,6 +1527,38 @@ void LcdDisplay::SetEmotion(const char* emotion) {
         lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
     }
 #endif
+}
+
+void LcdDisplay::SetStatus(const char* status) {
+    LvglDisplay::SetStatus(status);
+    if (!emotion_large_ || status == nullptr || status[0] == '\0') return;
+
+    const std::string current(status);
+    if (current == last_large_status_) return;
+    last_large_status_ = current;
+
+    const char* state_emotion = nullptr;
+    ConversationVisualState visual_state = ConversationVisualState::Idle;
+    if (current == Lang::Strings::CONNECTING) {
+        visual_state = ConversationVisualState::Connecting;
+        state_emotion = "thinking";
+    } else if (current == Lang::Strings::LISTENING) {
+        visual_state = ConversationVisualState::Listening;
+        state_emotion = "listening";
+    } else if (current == Lang::Strings::SPEAKING) {
+        visual_state = ConversationVisualState::Speaking;
+        state_emotion = last_llm_emotion_.empty() ? "neutral" : last_llm_emotion_.c_str();
+    } else if (current == Lang::Strings::STANDBY) {
+        visual_state = ConversationVisualState::Idle;
+        state_emotion = "neutral";
+    }
+
+    if (state_emotion != nullptr) {
+        DisplayLockGuard lock(this);
+        conversation_visual_state_ = visual_state;
+        ApplyLargeEmotionLocked(state_emotion);
+        ESP_LOGI(TAG, "Animated face state: %s -> %s", status, state_emotion);
+    }
 }
 
 void LcdDisplay::SetTheme(Theme* theme) {
@@ -1292,7 +1706,7 @@ void LcdDisplay::SetTheme(Theme* theme) {
 void LcdDisplay::SetHideSubtitle(bool hide) {
     DisplayLockGuard lock(this);
     hide_subtitle_ = hide;
-    
+
     // Immediately update UI visibility based on the setting
     if (bottom_bar_ != nullptr) {
         if (hide) {
@@ -1300,9 +1714,57 @@ void LcdDisplay::SetHideSubtitle(bool hide) {
         } else {
             // Only show if there is actual content to display
             const char* text = (chat_message_label_ != nullptr) ? lv_label_get_text(chat_message_label_) : nullptr;
-            if (text != nullptr && text[0] != '\0') {
+            if (!emotion_large_ && text != nullptr && text[0] != '\0') {
                 lv_obj_remove_flag(bottom_bar_, LV_OBJ_FLAG_HIDDEN);
             }
+        }
+    }
+
+    // For WeChat message style: clear existing messages and hide content area
+    if (content_ != nullptr) {
+        if (hide) {
+            lv_obj_clean(content_);
+            lv_obj_add_flag(content_, LV_OBJ_FLAG_HIDDEN);
+        } else if (!emotion_large_) {
+            lv_obj_remove_flag(content_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+void LcdDisplay::SetEmotionLarge(bool enable) {
+    DisplayLockGuard lock(this);
+    emotion_large_ = enable;
+    if (emotion_overlay_ == nullptr) return;
+
+    if (enable) {
+        last_large_status_.clear();
+        conversation_visual_state_ = ConversationVisualState::Idle;
+        emotion_frame_ = 0;
+
+        if (gif_controller_) {
+            gif_controller_->Stop();
+            gif_controller_.reset();
+        }
+        if (top_bar_ != nullptr) lv_obj_add_flag(top_bar_, LV_OBJ_FLAG_HIDDEN);
+        if (status_bar_ != nullptr) lv_obj_add_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
+        if (content_ != nullptr) lv_obj_add_flag(content_, LV_OBJ_FLAG_HIDDEN);
+        if (bottom_bar_ != nullptr) lv_obj_add_flag(bottom_bar_, LV_OBJ_FLAG_HIDDEN);
+        if (preview_image_ != nullptr) lv_obj_add_flag(preview_image_, LV_OBJ_FLAG_HIDDEN);
+        if (emoji_image_ != nullptr) lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+        if (emoji_label_ != nullptr) lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+
+        lv_obj_remove_flag(emotion_overlay_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(emotion_overlay_);
+        if (low_battery_popup_ != nullptr) lv_obj_move_foreground(low_battery_popup_);
+        if (emotion_timer_ != nullptr) lv_timer_resume(emotion_timer_);
+        ApplyLargeEmotionLocked(large_emotion_.c_str());
+    } else {
+        if (emotion_timer_ != nullptr) lv_timer_pause(emotion_timer_);
+        lv_obj_add_flag(emotion_overlay_, LV_OBJ_FLAG_HIDDEN);
+        if (top_bar_ != nullptr) lv_obj_remove_flag(top_bar_, LV_OBJ_FLAG_HIDDEN);
+        if (status_bar_ != nullptr) lv_obj_remove_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
+        if (!hide_subtitle_ && content_ != nullptr) {
+            lv_obj_remove_flag(content_, LV_OBJ_FLAG_HIDDEN);
         }
     }
 }

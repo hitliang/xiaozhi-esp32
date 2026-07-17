@@ -17,6 +17,9 @@ void XiaozhiApp::OnEnter(AppContext& ctx, lv_obj_t* screen) {
     auto* display = ctx.display;
     if (display) {
         display->ClearChatMessages();
+        // Enter the dedicated text-free animated face mode before setting the first expression.
+        display->SetHideSubtitle(true);
+        display->SetEmotionLarge(true);
         display->SetEmotion("neutral");
     }
 
@@ -43,6 +46,13 @@ void XiaozhiApp::OnExit() {
 
     // Return to idle
     app.SetDeviceState(kDeviceStateIdle);
+
+    // Restore subtitle and normal emotion display
+    auto* display = Board::GetInstance().GetDisplay();
+    if (display) {
+        display->SetEmotionLarge(false);
+        display->SetHideSubtitle(false);
+    }
 
     ESP_LOGI(TAG, "Exited XiaoZhi app");
 }

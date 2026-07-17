@@ -17,6 +17,8 @@
 #include "device_state.h"
 #include "device_state_machine.h"
 
+class WeatherApp;
+
 // Main event bits
 #define MAIN_EVENT_SCHEDULE             (1 << 0)
 #define MAIN_EVENT_SEND_AUDIO           (1 << 1)
@@ -143,6 +145,7 @@ private:
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
     bool skip_ota_ = false;  // Skip OTA activation for custom server
+    WeatherApp* weather_app_ = nullptr;  // Owned by AppManager; used for network prefetch
 
 
     // Event handlers

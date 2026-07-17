@@ -40,7 +40,9 @@ public:
     virtual Theme* GetTheme() { return current_theme_; }
     virtual void UpdateStatusBar(bool update_all = false);
     virtual void SetPowerSaveMode(bool on);
-    virtual void SetupUI() { 
+    virtual void SetHideSubtitle(bool hide) {}
+    virtual void SetEmotionLarge(bool enable) {}
+    virtual void SetupUI() {
         setup_ui_called_ = true;
     }
 

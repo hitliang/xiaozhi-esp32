@@ -506,11 +506,12 @@ private:
         };
         lvgl_port_add_touch(&touch_cfg);
 
-        // Increase gesture detection threshold so short taps are not mistaken for swipes
+        // Keep taps reliable while allowing page swipes to react with less travel.
         lv_indev_t* indev = lv_indev_get_next(NULL);
         while (indev) {
             if (lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {
-                lv_indev_set_gesture_min_distance(indev, 80);
+                lv_indev_set_gesture_min_distance(indev, 46);
+                lv_indev_set_gesture_min_velocity(indev, 2);
                 break;
             }
             indev = lv_indev_get_next(indev);
@@ -538,8 +539,8 @@ public:
         InitializeCodecI2c();
         InitializeTca9554();
         InitializeAxp2101();
-        // Disable power save if charging at boot
-        if (pmic_->IsCharging()) {
+        // Keep the screen awake while external power is present, including charge-complete.
+        if (pmic_->IsCharging() || pmic_->IsChargingDone()) {
             power_save_timer_->SetEnabled(false);
         }
         InitializeSpi();
@@ -567,14 +568,19 @@ public:
 
     virtual bool GetBatteryLevel(int &level, bool& charging, bool& discharging) override {
         static bool last_discharging = false;
-        charging = pmic_->IsCharging();
-        discharging = pmic_->IsDischarging();
+        const bool charging_now = pmic_->IsCharging();
+        const bool charging_done = !charging_now && pmic_->IsChargingDone();
+        charging = charging_now || charging_done;
+        discharging = !charging && pmic_->IsDischarging();
         if (discharging != last_discharging) {
             power_save_timer_->SetEnabled(discharging);
             last_discharging = discharging;
         }
 
         level = pmic_->GetBatteryLevel();
+        if (charging_done && level >= 95) level = 100;
+        if (level < 0) level = 0;
+        if (level > 100) level = 100;
         return true;
     }
 

@@ -29,6 +29,71 @@ static LvglTheme* GetLvglTheme() {
     return static_cast<LvglTheme*>(theme);
 }
 
+static lv_obj_t* CreateLauncherPanel(lv_obj_t* parent, int x, int y, int width, int height,
+                                     uint32_t color, int radius) {
+    auto* panel = lv_obj_create(parent);
+    lv_obj_set_pos(panel, x, y);
+    lv_obj_set_size(panel, width, height);
+    lv_obj_set_style_radius(panel, radius, 0);
+    lv_obj_set_style_bg_color(panel, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(panel, 0, 0);
+    lv_obj_set_style_pad_all(panel, 0, 0);
+    lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(panel, LV_OBJ_FLAG_CLICKABLE);
+    return panel;
+}
+
+static void ConfigureLauncherScreen(lv_obj_t* screen, int width, int height) {
+    lv_obj_set_size(screen, width, height);
+    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(screen, 0, 0);
+    lv_obj_set_style_pad_all(screen, 0, 0);
+    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(screen, LV_SCROLLBAR_MODE_OFF);
+}
+
+static void BuildLauncherStatusBar(lv_obj_t* screen, const lv_font_t* icon_font,
+                                   lv_obj_t*& wifi_label, lv_obj_t*& mute_label,
+                                   lv_obj_t*& battery_label, lv_obj_t*& battery_percent_label) {
+    auto* bar = CreateLauncherPanel(screen, 12, 8, 344, 44, 0x0A111C, 22);
+    lv_obj_set_style_border_width(bar, 1, 0);
+    lv_obj_set_style_border_color(bar, lv_color_hex(0x172538), 0);
+    lv_obj_set_style_bg_grad_color(bar, lv_color_hex(0x070C13), 0);
+    lv_obj_set_style_bg_grad_dir(bar, LV_GRAD_DIR_HOR, 0);
+
+    wifi_label = lv_label_create(bar);
+    lv_label_set_text(wifi_label, "");
+    lv_obj_set_style_text_font(wifi_label, icon_font, 0);
+    lv_obj_set_style_text_color(wifi_label, lv_color_hex(0x77C7FF), 0);
+    lv_obj_set_pos(wifi_label, 14, 7);
+
+    mute_label = lv_label_create(bar);
+    lv_label_set_text(mute_label, "");
+    lv_obj_set_style_text_font(mute_label, icon_font, 0);
+    lv_obj_set_style_text_color(mute_label, lv_color_hex(0xFF8A7A), 0);
+    lv_obj_set_pos(mute_label, 214, 7);
+
+    auto* battery_pill = CreateLauncherPanel(bar, 252, 5, 84, 34, 0x111B29, 17);
+    lv_obj_set_style_border_width(battery_pill, 1, 0);
+    lv_obj_set_style_border_color(battery_pill, lv_color_hex(0x203149), 0);
+
+    battery_label = lv_label_create(battery_pill);
+    lv_label_set_text(battery_label, FONT_AWESOME_BATTERY_FULL);
+    lv_obj_set_style_text_font(battery_label, icon_font, 0);
+    lv_obj_set_style_text_color(battery_label, lv_color_hex(0xDCE7F5), 0);
+    lv_obj_set_pos(battery_label, 7, 2);
+
+    battery_percent_label = lv_label_create(battery_pill);
+    lv_label_set_text(battery_percent_label, "--");
+    lv_obj_set_style_text_font(battery_percent_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(battery_percent_label, lv_color_hex(0xB8C6D8), 0);
+    lv_obj_set_pos(battery_percent_label, 40, 9);
+    lv_obj_set_size(battery_percent_label, 39, 18);
+    lv_obj_set_style_text_align(battery_percent_label, LV_TEXT_ALIGN_CENTER, 0);
+}
+
 void AppManager::InitializeLauncher(AppContext& ctx) {
     app_context_ = ctx;
 
@@ -55,96 +120,84 @@ void AppManager::BuildHomeScreen() {
     auto* icon_font = theme->icon_font()->font();
     DisplayLockGuard lock(display);
 
-    auto bg_color = lv_color_black();
-    auto fg_color = lv_color_hex(0xFFFFFF);
-
     home_screen_ = lv_obj_create(nullptr);
-    lv_obj_set_size(home_screen_, display->width(), display->height());
-    lv_obj_set_style_bg_color(home_screen_, bg_color, 0);
-    lv_obj_set_style_bg_opa(home_screen_, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(home_screen_, 0, 0);
-    lv_obj_set_style_pad_all(home_screen_, 0, 0);
+    ConfigureLauncherScreen(home_screen_, display->width(), display->height());
 
-    // Top status bar (transparent on black)
-    lv_obj_t* top_bar = lv_obj_create(home_screen_);
-    lv_obj_set_size(top_bar, display->width(), LV_SIZE_CONTENT);
-    lv_obj_set_style_radius(top_bar, 0, 0);
-    lv_obj_set_style_bg_opa(top_bar, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(top_bar, 0, 0);
-    lv_obj_set_style_pad_hor(top_bar, 16, 0);
-    lv_obj_set_style_pad_ver(top_bar, 8, 0);
-    lv_obj_set_flex_flow(top_bar, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(top_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_scrollbar_mode(top_bar, LV_SCROLLBAR_MODE_OFF);
+    auto* glow = CreateLauncherPanel(home_screen_, 226, -72, 220, 220, 0x143A68, 110);
+    lv_obj_set_style_bg_opa(glow, LV_OPA_20, 0);
 
-    // WiFi icon (left)
-    home_wifi_label_ = lv_label_create(top_bar);
-    lv_label_set_text(home_wifi_label_, "");
-    lv_obj_set_style_text_font(home_wifi_label_, icon_font, 0);
-    lv_obj_set_style_text_color(home_wifi_label_, fg_color, 0);
+    BuildLauncherStatusBar(home_screen_, icon_font,
+                           home_wifi_label_, home_mute_label_,
+                           home_battery_label_, home_battery_percent_label_);
 
-    // Right icons: mute + battery
-    lv_obj_t* right_icons = lv_obj_create(top_bar);
-    lv_obj_set_size(right_icons, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(right_icons, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(right_icons, 0, 0);
-    lv_obj_set_style_pad_all(right_icons, 0, 0);
-    lv_obj_set_flex_flow(right_icons, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(right_icons, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    auto* time_card = CreateLauncherPanel(home_screen_, 16, 76, 336, 278, 0x101C31, 34);
+    lv_obj_set_style_bg_grad_color(time_card, lv_color_hex(0x05090F), 0);
+    lv_obj_set_style_bg_grad_dir(time_card, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_border_width(time_card, 1, 0);
+    lv_obj_set_style_border_color(time_card, lv_color_hex(0x213451), 0);
 
-    home_mute_label_ = lv_label_create(right_icons);
-    lv_label_set_text(home_mute_label_, "");
-    lv_obj_set_style_text_font(home_mute_label_, icon_font, 0);
-    lv_obj_set_style_text_color(home_mute_label_, fg_color, 0);
+    auto* accent = CreateLauncherPanel(time_card, 24, 26, 34, 5, 0x5DB8FF, 3);
+    lv_obj_set_style_bg_opa(accent, LV_OPA_COVER, 0);
 
-    home_battery_label_ = lv_label_create(right_icons);
-    lv_label_set_text(home_battery_label_, "");
-    lv_obj_set_style_text_font(home_battery_label_, icon_font, 0);
-    lv_obj_set_style_text_color(home_battery_label_, fg_color, 0);
-    lv_obj_set_style_margin_left(home_battery_label_, 8, 0);
+    auto* overline = lv_label_create(time_card);
+    lv_label_set_text(overline, "LOCAL TIME");
+    lv_obj_set_style_text_font(overline, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(overline, lv_color_hex(0x7E91AA), 0);
+    lv_obj_set_style_text_letter_space(overline, 2, 0);
+    lv_obj_set_pos(overline, 24, 42);
 
-    // Center content: time + date
-    lv_obj_t* center = lv_obj_create(home_screen_);
-    lv_obj_set_size(center, display->width(), display->height() - 60);
-    lv_obj_align(center, LV_ALIGN_CENTER, 0, 10);
-    lv_obj_set_style_bg_opa(center, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(center, 0, 0);
-    lv_obj_set_style_pad_all(center, 0, 0);
-    lv_obj_set_flex_flow(center, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(center, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    // Time - use 60px Noto font
-    home_time_label_ = lv_label_create(center);
-    lv_obj_set_style_text_font(home_time_label_, &font_noto_60_4, 0);
-    lv_obj_set_style_text_color(home_time_label_, fg_color, 0);
+    home_time_label_ = lv_label_create(time_card);
     lv_label_set_text(home_time_label_, "00:00");
+    lv_obj_set_style_text_font(home_time_label_, &font_noto_60_4, 0);
+    lv_obj_set_style_text_color(home_time_label_, lv_color_hex(0xF6F9FF), 0);
+    lv_obj_set_pos(home_time_label_, 18, 78);
+    lv_obj_set_size(home_time_label_, 300, 74);
+    lv_obj_set_style_text_align(home_time_label_, LV_TEXT_ALIGN_CENTER, 0);
 
-    // Date
-    home_date_label_ = lv_label_create(center);
-    lv_obj_set_style_text_font(home_date_label_, text_font, 0);
-    lv_obj_set_style_text_color(home_date_label_, lv_color_hex(0xAAAAAA), 0);
+    home_date_label_ = lv_label_create(time_card);
     lv_label_set_text(home_date_label_, "");
-    lv_obj_set_style_margin_top(home_date_label_, 4, 0);
+    lv_obj_set_style_text_font(home_date_label_, text_font, 0);
+    lv_obj_set_style_text_color(home_date_label_, lv_color_hex(0xB8C7DA), 0);
+    lv_obj_set_pos(home_date_label_, 18, 154);
+    lv_obj_set_size(home_date_label_, 300, 42);
+    lv_obj_set_style_text_align(home_date_label_, LV_TEXT_ALIGN_CENTER, 0);
 
-    // Swipe hint at bottom
-    lv_obj_t* hint = lv_label_create(home_screen_);
-    lv_obj_set_style_text_font(hint, text_font, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(0x555555), 0);
-    lv_label_set_text(hint, "← Swipe for Menu →");
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -20);
+    auto* divider = CreateLauncherPanel(time_card, 116, 211, 104, 1, 0x253751, 1);
+    lv_obj_set_style_bg_opa(divider, LV_OPA_COVER, 0);
 
-    // Swipe gesture detection
-    lv_obj_add_event_cb(home_screen_, [](lv_event_t* e) {
-        auto* self = static_cast<AppManager*>(lv_event_get_user_data(e));
-        auto gesture = lv_indev_get_gesture_dir(lv_indev_active());
-        if (gesture == LV_DIR_LEFT) {
+    auto* zone = lv_label_create(time_card);
+    lv_label_set_text(zone, "BEIJING  /  CST");
+    lv_obj_set_style_text_font(zone, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(zone, lv_color_hex(0x61758F), 0);
+    lv_obj_set_pos(zone, 18, 228);
+    lv_obj_set_size(zone, 300, 20);
+    lv_obj_set_style_text_align(zone, LV_TEXT_ALIGN_CENTER, 0);
+
+    auto* active_page = CreateLauncherPanel(home_screen_, 166, 385, 20, 6, 0x5DB8FF, 3);
+    lv_obj_set_style_bg_opa(active_page, LV_OPA_COVER, 0);
+    auto* menu_page = CreateLauncherPanel(home_screen_, 194, 385, 6, 6, 0x304159, 3);
+    lv_obj_set_style_bg_opa(menu_page, LV_OPA_COVER, 0);
+
+    auto* hint = lv_label_create(home_screen_);
+    lv_label_set_text(hint, "SWIPE LEFT  /  APPS");
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x586A82), 0);
+    lv_obj_set_style_text_letter_space(hint, 1, 0);
+    lv_obj_set_pos(hint, 34, 407);
+    lv_obj_set_size(hint, 300, 20);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+
+    lv_obj_add_event_cb(home_screen_, [](lv_event_t* event) {
+        auto* self = static_cast<AppManager*>(lv_event_get_user_data(event));
+        auto* indev = lv_indev_active();
+        if (indev && lv_indev_get_gesture_dir(indev) == LV_DIR_LEFT) {
+            lv_indev_wait_release(indev);
             self->OnSwipeLeft();
-        } else if (gesture == LV_DIR_RIGHT) {
-            self->OnSwipeRight();
         }
     }, LV_EVENT_GESTURE, this);
 
-    UpdateStatusBarIcons(home_wifi_label_, home_battery_label_, home_mute_label_);
+    UpdateStatusBarIcons(home_wifi_label_, home_battery_label_,
+                         home_battery_percent_label_, home_mute_label_);
 }
 
 void AppManager::BuildGridScreen() {
@@ -154,149 +207,153 @@ void AppManager::BuildGridScreen() {
     auto* icon_font = theme->icon_font()->font();
     DisplayLockGuard lock(display);
 
-    auto bg_color = lv_color_black();
-    auto fg_color = lv_color_hex(0xFFFFFF);
-    auto tile_bg = lv_color_hex(0x000000);
-    auto tile_border = lv_color_hex(0x000000);
-
     grid_screen_ = lv_obj_create(nullptr);
-    lv_obj_set_size(grid_screen_, display->width(), display->height());
-    lv_obj_set_style_bg_color(grid_screen_, bg_color, 0);
-    lv_obj_set_style_bg_opa(grid_screen_, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(grid_screen_, 0, 0);
-    lv_obj_set_style_pad_all(grid_screen_, 0, 0);
+    ConfigureLauncherScreen(grid_screen_, display->width(), display->height());
 
-    // Top status bar (transparent)
-    lv_obj_t* top_bar = lv_obj_create(grid_screen_);
-    lv_obj_set_size(top_bar, display->width(), LV_SIZE_CONTENT);
-    lv_obj_set_style_radius(top_bar, 0, 0);
-    lv_obj_set_style_bg_opa(top_bar, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(top_bar, 0, 0);
-    lv_obj_set_style_pad_hor(top_bar, 16, 0);
-    lv_obj_set_style_pad_ver(top_bar, 8, 0);
-    lv_obj_set_flex_flow(top_bar, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(top_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_scrollbar_mode(top_bar, LV_SCROLLBAR_MODE_OFF);
+    auto* glow = CreateLauncherPanel(grid_screen_, -96, 296, 230, 230, 0x102C51, 115);
+    lv_obj_set_style_bg_opa(glow, LV_OPA_20, 0);
 
-    grid_wifi_label_ = lv_label_create(top_bar);
-    lv_label_set_text(grid_wifi_label_, "");
-    lv_obj_set_style_text_font(grid_wifi_label_, icon_font, 0);
-    lv_obj_set_style_text_color(grid_wifi_label_, fg_color, 0);
+    BuildLauncherStatusBar(grid_screen_, icon_font,
+                           grid_wifi_label_, grid_mute_label_,
+                           grid_battery_label_, grid_battery_percent_label_);
 
-    lv_obj_t* right_icons = lv_obj_create(top_bar);
-    lv_obj_set_size(right_icons, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(right_icons, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(right_icons, 0, 0);
-    lv_obj_set_style_pad_all(right_icons, 0, 0);
-    lv_obj_set_flex_flow(right_icons, LV_FLEX_FLOW_ROW);
+    auto* title = lv_label_create(grid_screen_);
+    lv_label_set_text(title, "Apps");
+    lv_obj_set_style_text_font(title, text_font, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xF3F7FD), 0);
+    lv_obj_set_pos(title, 16, 57);
 
-    grid_mute_label_ = lv_label_create(right_icons);
-    lv_label_set_text(grid_mute_label_, "");
-    lv_obj_set_style_text_font(grid_mute_label_, icon_font, 0);
-    lv_obj_set_style_text_color(grid_mute_label_, fg_color, 0);
+    auto* subtitle = lv_label_create(grid_screen_);
+    lv_label_set_text(subtitle, "YOUR APPLICATIONS");
+    lv_obj_set_style_text_font(subtitle, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(subtitle, lv_color_hex(0x60758F), 0);
+    lv_obj_set_style_text_letter_space(subtitle, 1, 0);
+    lv_obj_set_pos(subtitle, 104, 70);
 
-    grid_battery_label_ = lv_label_create(right_icons);
-    lv_label_set_text(grid_battery_label_, "");
-    lv_obj_set_style_text_font(grid_battery_label_, icon_font, 0);
-    lv_obj_set_style_text_color(grid_battery_label_, fg_color, 0);
-    lv_obj_set_style_margin_left(grid_battery_label_, 8, 0);
+    static const uint32_t accent_colors[9] = {
+        0x66C7FF, 0xA98BFF, 0x67D5B5,
+        0xFFB66F, 0xFF7E9D, 0x78A7FF,
+        0xE7CB72, 0x65D7EA, 0xB994FF,
+    };
+    static const uint32_t badge_colors[9] = {
+        0x102A3E, 0x251C3D, 0x12352E,
+        0x3A291B, 0x3A1D28, 0x182B4A,
+        0x342E19, 0x12343B, 0x2B1E3E,
+    };
 
-    // Grid area
-    lv_obj_t* grid_area = lv_obj_create(grid_screen_);
-    lv_obj_set_size(grid_area, display->width(), display->height() - 50);
-    lv_obj_align(grid_area, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_set_style_bg_opa(grid_area, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(grid_area, 0, 0);
-    lv_obj_set_style_pad_all(grid_area, 8, 0);
+    constexpr int tile_width = 104;
+    constexpr int tile_height = 90;
+    constexpr int x_gap = 10;
+    constexpr int y_gap = 8;
+    constexpr int start_x = 16;
+    constexpr int start_y = 98;
 
-    lv_obj_set_flex_flow(grid_area, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(grid_area, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    for (int index = 0; index < 9; ++index) {
+        const int row = index / 3;
+        const int column = index % 3;
+        auto* tile = lv_obj_create(grid_screen_);
+        lv_obj_set_pos(tile, start_x + column * (tile_width + x_gap),
+                       start_y + row * (tile_height + y_gap));
+        lv_obj_set_size(tile, tile_width, tile_height);
+        lv_obj_set_style_radius(tile, 22, 0);
+        lv_obj_set_style_bg_color(tile, lv_color_hex(0x0D1623), 0);
+        lv_obj_set_style_bg_color(tile, lv_color_hex(0x17263A), LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(tile, 1, 0);
+        lv_obj_set_style_border_color(tile, lv_color_hex(0x1C2B40), 0);
+        lv_obj_set_style_border_color(tile, lv_color_hex(accent_colors[index]), LV_STATE_PRESSED);
+        lv_obj_set_style_pad_all(tile, 0, 0);
+        lv_obj_set_style_shadow_width(tile, 0, 0);
+        lv_obj_set_style_transform_scale(tile, 246, LV_STATE_PRESSED);
+        lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(tile, LV_OBJ_FLAG_GESTURE_BUBBLE);
 
-    int tile_w = (display->width() - 32) / 3;
-    int tile_h = (display->height() - 90) / 3;
+        auto* badge = CreateLauncherPanel(tile, 30, 8, 44, 44,
+                                          badge_colors[index], 15);
+        lv_obj_set_style_border_width(badge, 1, 0);
+        lv_obj_set_style_border_color(badge, lv_color_hex(accent_colors[index]), 0);
+        lv_obj_set_style_border_opa(badge, LV_OPA_30, 0);
 
-    for (int row = 0; row < 3; row++) {
-        lv_obj_t* row_cont = lv_obj_create(grid_area);
-        lv_obj_set_size(row_cont, display->width() - 16, tile_h);
-        lv_obj_set_style_bg_opa(row_cont, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(row_cont, 0, 0);
-        lv_obj_set_style_pad_all(row_cont, 0, 0);
-        lv_obj_set_flex_flow(row_cont, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(row_cont, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        auto* icon = lv_label_create(badge);
+        lv_label_set_text(icon, "");
+        lv_obj_set_style_text_font(icon, icon_font, 0);
+        lv_obj_set_style_text_color(icon, lv_color_hex(accent_colors[index]), 0);
+        lv_obj_center(icon);
+        lv_obj_clear_flag(icon, LV_OBJ_FLAG_CLICKABLE);
 
-        for (int col = 0; col < 3; col++) {
-            int idx = row * 3 + col;
-            lv_obj_t* tile = lv_obj_create(row_cont);
-            lv_obj_set_size(tile, tile_w - 4, tile_h - 4);
-            lv_obj_set_style_radius(tile, 16, 0);
-            lv_obj_set_style_bg_color(tile, tile_bg, 0);
-            lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
-            lv_obj_set_style_border_width(tile, 1, 0);
-            lv_obj_set_style_border_color(tile, tile_border, 0);
-            lv_obj_set_style_pad_all(tile, 6, 0);
-            lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
-            lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        auto* name = lv_label_create(tile);
+        lv_label_set_text(name, "");
+        lv_obj_set_style_text_font(name, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(name, lv_color_hex(0xD2DDEA), 0);
+        lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_pos(name, 4, 62);
+        lv_obj_set_size(name, 96, 20);
+        lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+        lv_obj_clear_flag(name, LV_OBJ_FLAG_CLICKABLE);
 
-            // Icon - use icon_font for compact grid tiles
-            lv_obj_t* icon = lv_label_create(tile);
-            lv_obj_set_style_text_font(icon, icon_font, 0);
-            lv_obj_set_style_text_color(icon, fg_color, 0);
-            lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
-            lv_obj_set_width(icon, LV_PCT(100));
-            lv_label_set_text(icon, "");
-
-            // Name - use proportional Montserrat font for compact English text
-            lv_obj_t* name = lv_label_create(tile);
-            lv_obj_set_style_text_font(name, &lv_font_montserrat_14, 0);
-            lv_obj_set_style_text_color(name, fg_color, 0);
-            lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
-            lv_obj_set_width(name, LV_PCT(100));
-            lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
-            lv_label_set_text(name, "");
-            lv_obj_set_style_margin_top(name, 2, 0);
-
-            lv_obj_set_user_data(tile, icon);
-
-            lv_obj_add_event_cb(tile, [](lv_event_t* e) {
-                lv_obj_t* tile = lv_event_get_target_obj(e);
-                auto* self = static_cast<AppManager*>(lv_event_get_user_data(e));
-                for (int i = 0; i < 9; i++) {
-                    if (self->grid_tiles_[i] == tile) {
-                        self->OpenApp(i);
-                        return;
-                    }
+        lv_obj_add_event_cb(tile, [](lv_event_t* event) {
+            auto* clicked_tile = lv_event_get_current_target_obj(event);
+            auto* self = static_cast<AppManager*>(lv_event_get_user_data(event));
+            for (int i = 0; i < 9; ++i) {
+                if (self->grid_tiles_[i] == clicked_tile) {
+                    self->OpenApp(i);
+                    return;
                 }
-            }, LV_EVENT_CLICKED, this);
+            }
+        }, LV_EVENT_CLICKED, this);
 
-            grid_tiles_[idx] = tile;
-        }
+        grid_tiles_[index] = tile;
+        grid_icon_labels_[index] = icon;
+        grid_name_labels_[index] = name;
     }
 
-    // Swipe gesture to go back to home
-    lv_obj_add_event_cb(grid_screen_, [](lv_event_t* e) {
-        auto* self = static_cast<AppManager*>(lv_event_get_user_data(e));
-        auto gesture = lv_indev_get_gesture_dir(lv_indev_active());
-        if (gesture == LV_DIR_RIGHT) {
+    auto* home_page = CreateLauncherPanel(grid_screen_, 168, 405, 6, 6, 0x304159, 3);
+    lv_obj_set_style_bg_opa(home_page, LV_OPA_COVER, 0);
+    auto* active_page = CreateLauncherPanel(grid_screen_, 182, 405, 20, 6, 0x5DB8FF, 3);
+    lv_obj_set_style_bg_opa(active_page, LV_OPA_COVER, 0);
+
+    auto* hint = lv_label_create(grid_screen_);
+    lv_label_set_text(hint, "SWIPE RIGHT  /  HOME");
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(0x586A82), 0);
+    lv_obj_set_style_text_letter_space(hint, 1, 0);
+    lv_obj_set_pos(hint, 34, 420);
+    lv_obj_set_size(hint, 300, 20);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+
+    lv_obj_add_event_cb(grid_screen_, [](lv_event_t* event) {
+        auto* self = static_cast<AppManager*>(lv_event_get_user_data(event));
+        auto* indev = lv_indev_active();
+        if (indev && lv_indev_get_gesture_dir(indev) == LV_DIR_RIGHT) {
+            lv_indev_wait_release(indev);
             self->OnSwipeRight();
         }
     }, LV_EVENT_GESTURE, this);
+
+    UpdateStatusBarIcons(grid_wifi_label_, grid_battery_label_,
+                         grid_battery_percent_label_, grid_mute_label_);
 }
 
 void AppManager::PopulateGridTiles() {
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
-    int count = apps_.size();
+    int count = static_cast<int>(apps_.size());
     if (count > 9) count = 9;
-    for (int i = 0; i < count; i++) {
-        auto* tile = grid_tiles_[i];
+    for (int index = 0; index < 9; ++index) {
+        auto* tile = grid_tiles_[index];
         if (!tile) continue;
-        uint32_t child_cnt = lv_obj_get_child_cnt(tile);
-        if (child_cnt >= 2) {
-            lv_obj_t* icon_label = lv_obj_get_child(tile, 0);
-            lv_obj_t* name_label = lv_obj_get_child(tile, 1);
-            if (icon_label) lv_label_set_text(icon_label, apps_[i].second->GetIcon());
-            if (name_label) lv_label_set_text(name_label, apps_[i].second->GetName());
+
+        if (index < count) {
+            lv_obj_clear_flag(tile, LV_OBJ_FLAG_HIDDEN);
+            if (grid_icon_labels_[index]) {
+                lv_label_set_text(grid_icon_labels_[index], apps_[index].second->GetIcon());
+            }
+            if (grid_name_labels_[index]) {
+                lv_label_set_text(grid_name_labels_[index], apps_[index].second->GetName());
+            }
+        } else {
+            lv_obj_add_flag(tile, LV_OBJ_FLAG_HIDDEN);
         }
     }
     ESP_LOGI(TAG, "Grid populated with %d apps", count);
@@ -316,27 +373,33 @@ void AppManager::BuildBlackScreen() {
     // Wake from black screen only via BOOT button, not touch
 }
 
-void AppManager::UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_label, lv_obj_t* mute_label) {
+void AppManager::UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_label,
+                                      lv_obj_t* battery_percent_label,
+                                      lv_obj_t* mute_label) {
     auto& board = Board::GetInstance();
 
-    // WiFi icon
     if (wifi_label) {
         const char* wifi_icon = board.GetNetworkStateIcon();
-        if (wifi_icon) {
-            lv_label_set_text(wifi_label, wifi_icon);
-        }
+        lv_label_set_text(wifi_label, wifi_icon ? wifi_icon : "");
+        lv_obj_set_style_text_color(wifi_label,
+                                    lv_color_hex(wifi_icon ? 0x77C7FF : 0x617084), 0);
     }
 
-    // Battery icon
-    if (battery_label) {
-        int level;
-        bool charging, discharging;
+    if (battery_label && battery_percent_label) {
+        int level = 0;
+        bool charging = false;
+        bool discharging = false;
         if (board.GetBatteryLevel(level, charging, discharging)) {
-            const char* icon;
+            if (level < 0) level = 0;
+            if (level > 100) level = 100;
+
+            const char* icon = nullptr;
+            uint32_t color = 0xDCE7F5;
             if (charging) {
-                icon = FONT_AWESOME_BATTERY_BOLT;
+                icon = level >= 100 ? FONT_AWESOME_BATTERY_FULL : FONT_AWESOME_BATTERY_BOLT;
+                color = 0x62E6A7;
             } else {
-                const char* levels[] = {
+                static const char* levels[] = {
                     FONT_AWESOME_BATTERY_EMPTY,
                     FONT_AWESOME_BATTERY_QUARTER,
                     FONT_AWESOME_BATTERY_HALF,
@@ -345,48 +408,67 @@ void AppManager::UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_la
                     FONT_AWESOME_BATTERY_FULL,
                 };
                 icon = levels[level / 20];
+                if (level <= 20) color = 0xFF7E72;
+                else if (level <= 40) color = 0xFFC56B;
             }
+
+            char percentage[8];
+            snprintf(percentage, sizeof(percentage), "%d%%", level);
             lv_label_set_text(battery_label, icon);
+            lv_label_set_text(battery_percent_label, percentage);
+            lv_obj_set_style_text_color(battery_label, lv_color_hex(color), 0);
+            lv_obj_set_style_text_color(battery_percent_label, lv_color_hex(color), 0);
+        } else {
+            lv_label_set_text(battery_label, FONT_AWESOME_BATTERY_SLASH);
+            lv_label_set_text(battery_percent_label, "--");
+            lv_obj_set_style_text_color(battery_label, lv_color_hex(0x66768B), 0);
+            lv_obj_set_style_text_color(battery_percent_label, lv_color_hex(0x66768B), 0);
         }
     }
 
-    // Mute icon
     if (mute_label) {
-        auto codec = board.GetAudioCodec();
-        if (codec && codec->output_volume() == 0) {
-            lv_label_set_text(mute_label, FONT_AWESOME_VOLUME_XMARK);
-        } else {
-            lv_label_set_text(mute_label, "");
-        }
+        auto* codec = board.GetAudioCodec();
+        const bool muted = codec && codec->output_volume() == 0;
+        lv_label_set_text(mute_label, muted ? FONT_AWESOME_VOLUME_XMARK : "");
     }
 }
 
-void AppManager::ShowHome() {
+void AppManager::ShowHome(bool animated) {
     if (screen_off_) return;
     home_active_ = true;
 
-    // Cancel any stale pending app switch (e.g. tile click during swipe gesture)
     pending_switch_ = false;
     pending_switch_id_.clear();
 
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
-    lv_screen_load(home_screen_);
-    ESP_LOGI(TAG, "Showing home screen");
+    UpdateStatusBarIcons(home_wifi_label_, home_battery_label_,
+                         home_battery_percent_label_, home_mute_label_);
+    if (animated && lv_screen_active() != home_screen_) {
+        lv_screen_load_anim(home_screen_, LV_SCREEN_LOAD_ANIM_MOVE_RIGHT, 220, 0, false);
+    } else {
+        lv_screen_load(home_screen_);
+    }
+    ESP_LOGI(TAG, "Showing home screen%s", animated ? " (animated)" : "");
 }
 
-void AppManager::ShowGrid() {
+void AppManager::ShowGrid(bool animated) {
     if (screen_off_) return;
     home_active_ = false;
 
-    // Cancel any stale pending app switch
     pending_switch_ = false;
     pending_switch_id_.clear();
 
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
-    lv_screen_load(grid_screen_);
-    ESP_LOGI(TAG, "Showing grid screen");
+    UpdateStatusBarIcons(grid_wifi_label_, grid_battery_label_,
+                         grid_battery_percent_label_, grid_mute_label_);
+    if (animated && lv_screen_active() != grid_screen_) {
+        lv_screen_load_anim(grid_screen_, LV_SCREEN_LOAD_ANIM_MOVE_LEFT, 220, 0, false);
+    } else {
+        lv_screen_load(grid_screen_);
+    }
+    ESP_LOGI(TAG, "Showing grid screen%s", animated ? " (animated)" : "");
 }
 
 void AppManager::LoadDefaultScreen() {
@@ -435,7 +517,7 @@ void AppManager::OnSwipeLeft() {
         pending_switch_id_.clear();
         Application::GetInstance().Schedule([this]() {
             if (home_active_ && !screen_off_) {
-                ShowGrid();
+                ShowGrid(true);
             }
             swipe_pending_ = false;
         });
@@ -450,7 +532,7 @@ void AppManager::OnSwipeRight() {
         pending_switch_id_.clear();
         Application::GetInstance().Schedule([this]() {
             if (!home_active_ && !screen_off_) {
-                ShowHome();
+                ShowHome(true);
             }
             swipe_pending_ = false;
         });
@@ -587,19 +669,21 @@ void AppManager::OnClockTick() {
             }
         }
 
-        // Update status bar every 10 clock ticks
+        // Refresh the status bar frequently so charging changes appear promptly.
         static int home_tick = 0;
-        if (home_tick++ % 10 == 0) {
+        if (home_tick++ % 2 == 0) {
             DisplayLockGuard lock(display);
-            UpdateStatusBarIcons(home_wifi_label_, home_battery_label_, home_mute_label_);
+            UpdateStatusBarIcons(home_wifi_label_, home_battery_label_,
+                                 home_battery_percent_label_, home_mute_label_);
             if (home_tick >= 1000) home_tick = 0;
         }
     } else if (!home_active_ && !IsInApp()) {
         // On grid screen
         static int grid_tick = 0;
-        if (grid_tick++ % 10 == 0) {
+        if (grid_tick++ % 2 == 0) {
             DisplayLockGuard lock(display);
-            UpdateStatusBarIcons(grid_wifi_label_, grid_battery_label_, grid_mute_label_);
+            UpdateStatusBarIcons(grid_wifi_label_, grid_battery_label_,
+                                 grid_battery_percent_label_, grid_mute_label_);
             if (grid_tick >= 1000) grid_tick = 0;
         }
     }

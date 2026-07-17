@@ -80,12 +80,16 @@ private:
     lv_obj_t* home_date_label_ = nullptr;
     lv_obj_t* home_wifi_label_ = nullptr;
     lv_obj_t* home_battery_label_ = nullptr;
+    lv_obj_t* home_battery_percent_label_ = nullptr;
     lv_obj_t* home_mute_label_ = nullptr;
 
     // Grid screen widgets
     lv_obj_t* grid_tiles_[9] = {nullptr};
+    lv_obj_t* grid_icon_labels_[9] = {nullptr};
+    lv_obj_t* grid_name_labels_[9] = {nullptr};
     lv_obj_t* grid_wifi_label_ = nullptr;
     lv_obj_t* grid_battery_label_ = nullptr;
+    lv_obj_t* grid_battery_percent_label_ = nullptr;
     lv_obj_t* grid_mute_label_ = nullptr;
 
     bool screen_off_ = false;
@@ -95,9 +99,10 @@ private:
     void BuildHomeScreen();
     void BuildGridScreen();
     void BuildBlackScreen();
-    void UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_label, lv_obj_t* mute_label);
-    void ShowHome();
-    void ShowGrid();
+    void UpdateStatusBarIcons(lv_obj_t* wifi_label, lv_obj_t* battery_label,
+                              lv_obj_t* battery_percent_label, lv_obj_t* mute_label);
+    void ShowHome(bool animated = false);
+    void ShowGrid(bool animated = false);
     void EnterBlackScreen();
     void ExitBlackScreen();
     void OnSwipeLeft();

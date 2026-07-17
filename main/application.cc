@@ -18,6 +18,7 @@
 #include "app/apps/metronome_app.h"
 #include "app/apps/ear_trainer_app.h"
 #include "app/apps/flappy_bird_app.h"
+#include "app/apps/mp3_player_app.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -101,12 +102,15 @@ void Application::Initialize() {
         // Register all apps
         mgr.RegisterApp("xiaozhi", std::make_unique<XiaozhiApp>());
         mgr.RegisterApp("settings", std::make_unique<SettingsApp>());
-        mgr.RegisterApp("weather", std::make_unique<WeatherApp>());
+        auto weather_app = std::make_unique<WeatherApp>();
+        weather_app_ = weather_app.get();
+        mgr.RegisterApp("weather", std::move(weather_app));
         mgr.RegisterApp("attitude", std::make_unique<AttitudeApp>());
         mgr.RegisterApp("ball_physics", std::make_unique<BallPhysicsApp>());
         mgr.RegisterApp("metronome", std::make_unique<MetronomeApp>());
         mgr.RegisterApp("ear_trainer", std::make_unique<EarTrainerApp>());
         // mgr.RegisterApp("flappy_bird", std::make_unique<FlappyBirdApp>());
+        mgr.RegisterApp("mp3_player", std::make_unique<Mp3PlayerApp>());
 
         // Now populate grid tiles with registered apps
         mgr.PopulateGridTiles();
@@ -307,6 +311,9 @@ void Application::Run() {
 
 void Application::HandleNetworkConnectedEvent() {
     ESP_LOGI(TAG, "Network connected");
+    if (weather_app_) {
+        weather_app_->Prefetch();
+    }
     auto state = GetDeviceState();
 
     if (state == kDeviceStateStarting || state == kDeviceStateWifiConfiguring) {
@@ -1187,4 +1194,3 @@ void Application::ResetProtocol() {
         protocol_.reset();
     });
 }
-

@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <memory>
+#include <string>
 
 #define PREVIEW_IMAGE_DURATION_MS 5000
 
@@ -35,8 +36,40 @@ protected:
     esp_timer_handle_t preview_timer_ = nullptr;
     std::unique_ptr<LvglImage> preview_image_cached_ = nullptr;
     bool hide_subtitle_ = false;  // Control whether to hide chat messages/subtitles
+    bool emotion_large_ = false;   // Control whether to show emotion in large fullscreen mode
+    std::string last_llm_emotion_; // Last emotion set by LLM (to restore during speaking)
+    std::string large_emotion_ = "neutral";
+    std::string last_large_status_;
+
+    enum class ConversationVisualState {
+        Idle,
+        Connecting,
+        Listening,
+        Speaking,
+    };
+
+    ConversationVisualState conversation_visual_state_ = ConversationVisualState::Idle;
+    lv_obj_t* emotion_overlay_ = nullptr;
+    lv_obj_t* emotion_glow_ = nullptr;
+    lv_obj_t* emotion_ring_ = nullptr;
+    lv_obj_t* emotion_face_ = nullptr;
+    lv_obj_t* emotion_left_brow_ = nullptr;
+    lv_obj_t* emotion_right_brow_ = nullptr;
+    lv_obj_t* emotion_left_eye_ = nullptr;
+    lv_obj_t* emotion_right_eye_ = nullptr;
+    lv_obj_t* emotion_mouth_ = nullptr;
+    lv_obj_t* emotion_left_cheek_ = nullptr;
+    lv_obj_t* emotion_right_cheek_ = nullptr;
+    lv_obj_t* emotion_dots_[3] = {nullptr};
+    lv_timer_t* emotion_timer_ = nullptr;
+    uint32_t emotion_frame_ = 0;
+    uint32_t emotion_accent_color_ = 0x59D9FF;
 
     void InitializeLcdThemes();
+    void CreateLargeEmotionUI(lv_obj_t* screen);
+    void ApplyLargeEmotionLocked(const char* emotion);
+    void UpdateLargeEmotionFrame();
+    static void EmotionTimerCallback(lv_timer_t* timer);
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
 
@@ -48,6 +81,7 @@ public:
     ~LcdDisplay();
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetChatMessage(const char* role, const char* content) override;
+    virtual void SetStatus(const char* status) override;
     virtual void ClearChatMessages() override;
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
     virtual void SetupUI() override;
@@ -55,7 +89,10 @@ public:
     virtual void SetTheme(Theme* theme) override;
     
     // Set whether to hide chat messages/subtitles
-    void SetHideSubtitle(bool hide);
+    void SetHideSubtitle(bool hide) override;
+
+    // Set whether to display emotion in large fullscreen mode
+    void SetEmotionLarge(bool enable) override;
 };
 
 // SPI LCD display
