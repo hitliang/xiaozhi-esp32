@@ -21,6 +21,7 @@
 #include "app/apps/mp3_player_app.h"
 
 #include <cstring>
+#include <algorithm>
 #include <esp_log.h>
 #include <cJSON.h>
 #include <driver/gpio.h>
@@ -88,7 +89,7 @@ void Application::Initialize() {
             ws_settings.SetString("url", custom_url);
             ws_settings.SetString("token", "");
             ws_settings.SetInt("version", 3);  // BinaryProtocol3: 4-byte header
-            skip_ota_ = true;
+            use_custom_server_ = true;
         }
     }
 
@@ -358,49 +359,46 @@ void Application::HandleActivationDoneEvent() {
 
     auto display = Board::GetInstance().GetDisplay();
 
-    if (skip_ota_) {
+    has_server_time_ = ota_ && ota_->HasServerTime();
+
+    if (use_custom_server_) {
         display->ShowNotification("已连接自定义服务器");
         display->SetChatMessage("system", "");
         audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
 
-        // Start NTP time sync since we skip OTA server time
+        // Keep the clock accurate independently of the OTA endpoint.
         setenv("TZ", "CST-8", 1);
         tzset();
         esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG("ntp.aliyun.com");
         esp_netif_sntp_init(&sntp_config);
         ESP_LOGI(TAG, "SNTP time sync started (CST-8)");
     } else {
-        has_server_time_ = ota_->HasServerTime();
-
         std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
         display->ShowNotification(message.c_str());
         display->SetChatMessage("system", "");
-
-        // Release OTA object after activation is complete
-        ota_.reset();
-        auto& board = Board::GetInstance();
-        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
 
         Schedule([this]() {
             audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
         });
     }
+
+    ota_.reset();
+    auto& board = Board::GetInstance();
+    board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
 }
 
 void Application::ActivationTask() {
-    if (skip_ota_) {
-        // Skip OTA, go directly to protocol initialization
-        ESP_LOGI(TAG, "Skipping OTA activation (custom server configured)");
-        InitializeProtocol();
-        xEventGroupSetBits(event_group_, MAIN_EVENT_ACTIVATION_DONE);
-        return;
-    }
-
     // Create OTA object for activation process
     ota_ = std::make_unique<Ota>();
 
-    // Check for new assets version
-    CheckAssetsVersion();
+    // Reaching this point means the app, display, audio and network are healthy.
+    // Confirm a newly booted OTA image before contacting any external service.
+    ota_->MarkCurrentVersionValid();
+
+    if (!use_custom_server_) {
+        // The custom server owns firmware only; upstream activation owns assets.
+        CheckAssetsVersion();
+    }
 
     // Check for new firmware version
     CheckNewVersion();
@@ -471,9 +469,9 @@ void Application::CheckAssetsVersion() {
 }
 
 void Application::CheckNewVersion() {
-    const int MAX_RETRY = 10;
+    const int max_retry = use_custom_server_ ? 2 : 10;
     int retry_count = 0;
-    int retry_delay = 10; // Initial retry delay in seconds
+    int retry_delay = use_custom_server_ ? 2 : 10;
 
     auto& board = Board::GetInstance();
     while (true) {
@@ -483,7 +481,7 @@ void Application::CheckNewVersion() {
         esp_err_t err = ota_->CheckVersion();
         if (err != ESP_OK) {
             retry_count++;
-            if (retry_count >= MAX_RETRY) {
+            if (retry_count >= max_retry) {
                 ESP_LOGE(TAG, "Too many retries, exit version check");
                 return;
             }
@@ -494,21 +492,33 @@ void Application::CheckNewVersion() {
             snprintf(buffer, sizeof(buffer), Lang::Strings::CHECK_NEW_VERSION_FAILED, retry_delay, error_message);
             Alert(Lang::Strings::ERROR, buffer, "cloud_slash", Lang::Sounds::OGG_EXCLAMATION);
 
-            ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
+            ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, max_retry);
             for (int i = 0; i < retry_delay; i++) {
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 if (GetDeviceState() == kDeviceStateIdle) {
                     break;
                 }
             }
-            retry_delay *= 2; // Double the retry delay
+            retry_delay = std::min(retry_delay * 2, 60);
             continue;
         }
         retry_count = 0;
-        retry_delay = 10; // Reset retry delay
+        retry_delay = use_custom_server_ ? 2 : 10;
 
         if (ota_->HasNewVersion()) {
-            if (UpgradeFirmware(ota_->GetFirmwareUrl(), ota_->GetFirmwareVersion())) {
+            if (use_custom_server_ &&
+                (ota_->GetFirmwareSha256().size() != 64 ||
+                 ota_->GetFirmwareSize() == 0)) {
+                ESP_LOGE(
+                    TAG,
+                    "Custom OTA manifest is missing required SHA-256 or size");
+                break;
+            }
+            if (UpgradeFirmware(
+                    ota_->GetFirmwareUrl(),
+                    ota_->GetFirmwareVersion(),
+                    ota_->GetFirmwareSha256(),
+                    ota_->GetFirmwareSize())) {
                 return; // This line will never be reached after reboot
             }
             // If upgrade failed, continue to normal operation
@@ -552,7 +562,7 @@ void Application::InitializeProtocol() {
 
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
 
-    if (skip_ota_) {
+    if (use_custom_server_) {
         // Custom server configured, use WebSocket directly
         protocol_ = std::make_unique<WebsocketProtocol>();
         ESP_LOGI(TAG, "Using WebSocket protocol (custom server)");
@@ -1048,7 +1058,11 @@ void Application::Reboot() {
     esp_restart();
 }
 
-bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
+bool Application::UpgradeFirmware(
+    const std::string& url,
+    const std::string& version,
+    const std::string& sha256,
+    size_t expected_size) {
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
 
@@ -1074,13 +1088,17 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
     audio_service_.Stop();
     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    bool upgrade_success = Ota::Upgrade(upgrade_url, [this, display](int progress, size_t speed) {
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, speed / 1024);
-        Schedule([display, message = std::string(buffer)]() {
-            display->SetChatMessage("system", message.c_str());
-        });
-    });
+    bool upgrade_success = Ota::Upgrade(
+        upgrade_url,
+        [this, display](int progress, size_t speed) {
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "%d%% %uKB/s",
+                     progress, speed / 1024);
+            Schedule([display, message = std::string(buffer)]() {
+                display->SetChatMessage("system", message.c_str());
+            });
+        },
+        version, sha256, expected_size);
 
     if (!upgrade_success) {
         // Upgrade failed, restart audio service and continue running

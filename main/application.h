@@ -113,7 +113,11 @@ public:
 
     void Reboot();
     void WakeWordInvoke(const std::string& wake_word);
-    bool UpgradeFirmware(const std::string& url, const std::string& version = "");
+    bool UpgradeFirmware(
+        const std::string& url,
+        const std::string& version = "",
+        const std::string& sha256 = "",
+        size_t expected_size = 0);
     bool CanEnterSleepMode();
     void SendMcpMessage(const std::string& payload);
     void SetAecMode(AecMode mode);
@@ -150,7 +154,7 @@ private:
     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
-    bool skip_ota_ = false;  // Skip OTA activation for custom server
+    bool use_custom_server_ = false;
     WeatherApp* weather_app_ = nullptr;  // Owned by AppManager; used for network prefetch
 
 

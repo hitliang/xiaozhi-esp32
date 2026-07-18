@@ -478,10 +478,12 @@ void LcdDisplay::ApplyLargeEmotionLocked(const char* emotion) {
     const auto& value = large_emotion_;
 
     if (value == "happy" || value == "laughing" || value == "funny" ||
-        value == "delicious" || value == "confident" || value == "relaxed") {
+        value == "delicious" || value == "silly" || value == "winking") {
         emotion_accent_color_ = 0xFFD36A;
     } else if (value == "loving" || value == "kissy" || value == "embarrassed") {
         emotion_accent_color_ = 0xFF83B5;
+    } else if (value == "confident" || value == "cool") {
+        emotion_accent_color_ = 0x79F2B8;
     } else if (value == "sad" || value == "crying" || value == "sleepy") {
         emotion_accent_color_ = 0x73A9FF;
     } else if (value == "angry") {
@@ -490,6 +492,8 @@ void LcdDisplay::ApplyLargeEmotionLocked(const char* emotion) {
         emotion_accent_color_ = 0xAA8BFF;
     } else if (value == "surprised" || value == "shocked") {
         emotion_accent_color_ = 0x66E4CF;
+    } else if (value == "relaxed") {
+        emotion_accent_color_ = 0x82D8FF;
     } else {
         emotion_accent_color_ = 0x59D9FF;
     }
@@ -515,13 +519,22 @@ void LcdDisplay::UpdateLargeEmotionFrame() {
     const auto accent = lv_color_hex(emotion_accent_color_);
     const auto& value = large_emotion_;
 
-    const bool positive = value == "happy" || value == "laughing" || value == "funny" ||
-                          value == "loving" || value == "kissy" || value == "embarrassed" ||
-                          value == "delicious" || value == "confident" || value == "relaxed";
-    const bool sad = value == "sad" || value == "crying";
+    const bool laughing = value == "laughing";
+    const bool playful = value == "funny" || value == "silly";
+    const bool affectionate = value == "loving" || value == "kissy";
+    const bool embarrassed = value == "embarrassed";
+    const bool confident = value == "confident" || value == "cool";
+    const bool relaxed = value == "relaxed";
+    const bool delicious = value == "delicious";
+    const bool positive = value == "happy" || laughing || playful || affectionate ||
+                          embarrassed || confident || relaxed || delicious;
+    const bool crying = value == "crying";
+    const bool sad = value == "sad" || crying;
     const bool angry = value == "angry";
-    const bool surprised = value == "surprised" || value == "shocked";
-    const bool thinking = value == "thinking" || value == "confused" || value == "listening";
+    const bool shocked = value == "shocked";
+    const bool surprised = value == "surprised" || shocked;
+    const bool confused = value == "confused";
+    const bool thinking = value == "thinking" || confused || value == "listening";
     const bool sleepy = value == "sleepy";
     const bool winking = value == "winking";
     const bool speaking = conversation_visual_state_ == ConversationVisualState::Speaking;
@@ -570,8 +583,82 @@ void LcdDisplay::UpdateLargeEmotionFrame() {
     int mouth_width = face_width * 28 / 100;
     int mouth_height = face_height * 6 / 100;
     int mouth_y = face_height * 68 / 100;
+    int mouth_x_offset = 0;
 
-    if (positive) {
+    // Reset the two auxiliary shapes. They act as blush for warm emotions and
+    // become animated tears for crying.
+    place(emotion_left_cheek_, face_width * 15 / 100, face_height * 57 / 100,
+          face_width * 12 / 100, face_height * 5 / 100);
+    place(emotion_right_cheek_, face_width * 73 / 100, face_height * 57 / 100,
+          face_width * 12 / 100, face_height * 5 / 100);
+    lv_obj_set_style_bg_color(emotion_left_cheek_, lv_color_hex(0xFF83B5), 0);
+    lv_obj_set_style_bg_color(emotion_right_cheek_, lv_color_hex(0xFF83B5), 0);
+    lv_obj_set_style_bg_opa(emotion_left_cheek_, LV_OPA_70, 0);
+    lv_obj_set_style_bg_opa(emotion_right_cheek_, LV_OPA_70, 0);
+
+    if (laughing) {
+        eye_width = face_width * 19 / 100;
+        eye_height = face_height * 5 / 100;
+        eye_y = face_height * 35 / 100;
+        left_eye_x = face_width * 19 / 100;
+        right_eye_x = face_width * 62 / 100;
+        mouth_width = face_width * 38 / 100;
+        mouth_height = face_height * (15 + (emotion_frame_ % 3) * 2) / 100;
+        mouth_y = face_height * 61 / 100;
+        lv_obj_remove_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(emotion_right_cheek_, LV_OBJ_FLAG_HIDDEN);
+    } else if (playful) {
+        eye_width = face_width * 18 / 100;
+        eye_height = face_height * 23 / 100;
+        eye_y = face_height * 29 / 100;
+        mouth_width = face_width * 27 / 100;
+        mouth_height = face_height * 9 / 100;
+        mouth_y = face_height * 66 / 100;
+        mouth_x_offset = face_width * 5 / 100;
+        lv_obj_remove_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+    } else if (affectionate) {
+        eye_width = face_width * 19 / 100;
+        eye_height = face_height * 8 / 100;
+        eye_y = face_height * 35 / 100;
+        left_eye_x = face_width * 19 / 100;
+        right_eye_x = face_width * 62 / 100;
+        mouth_width = value == "kissy" ? face_width * 13 / 100 : face_width * 29 / 100;
+        mouth_height = value == "kissy" ? face_height * 10 / 100 : face_height * 9 / 100;
+        mouth_y = face_height * 65 / 100;
+        lv_obj_remove_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(emotion_right_cheek_, LV_OBJ_FLAG_HIDDEN);
+    } else if (embarrassed) {
+        eye_width = face_width * 16 / 100;
+        eye_height = face_height * 6 / 100;
+        eye_y = face_height * 39 / 100;
+        mouth_width = face_width * 18 / 100;
+        mouth_height = face_height * 5 / 100;
+        mouth_y = face_height * 70 / 100;
+        mouth_x_offset = face_width * 3 / 100;
+        lv_obj_remove_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(emotion_right_cheek_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_opa(emotion_left_cheek_, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_opa(emotion_right_cheek_, LV_OPA_COVER, 0);
+    } else if (confident) {
+        eye_width = face_width * 19 / 100;
+        eye_height = face_height * 10 / 100;
+        eye_y = face_height * 35 / 100;
+        mouth_width = face_width * 25 / 100;
+        mouth_height = face_height * 6 / 100;
+        mouth_y = face_height * 68 / 100;
+        mouth_x_offset = face_width * 5 / 100;
+        lv_obj_remove_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_transform_rotation(emotion_right_brow_, -100, 0);
+    } else if (relaxed) {
+        eye_width = face_width * 19 / 100;
+        eye_height = face_height * 4 / 100;
+        eye_y = face_height * 38 / 100;
+        left_eye_x = face_width * 19 / 100;
+        right_eye_x = face_width * 62 / 100;
+        mouth_width = face_width * 25 / 100;
+        mouth_height = face_height * 6 / 100;
+        mouth_y = face_height * 68 / 100;
+    } else if (positive) {
         eye_width = face_width * 18 / 100;
         eye_height = face_height * 7 / 100;
         eye_y = face_height * 36 / 100;
@@ -592,6 +679,19 @@ void LcdDisplay::UpdateLargeEmotionFrame() {
         lv_obj_remove_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_transform_rotation(emotion_left_brow_, -140, 0);
         lv_obj_set_style_transform_rotation(emotion_right_brow_, 140, 0);
+        if (crying) {
+            const int tear_height = face_height * (10 + emotion_frame_ % 4) / 100;
+            place(emotion_left_cheek_, face_width * 27 / 100, face_height * 51 / 100,
+                  face_width * 5 / 100, tear_height);
+            place(emotion_right_cheek_, face_width * 68 / 100, face_height * 51 / 100,
+                  face_width * 5 / 100, tear_height);
+            lv_obj_set_style_bg_color(emotion_left_cheek_, accent, 0);
+            lv_obj_set_style_bg_color(emotion_right_cheek_, accent, 0);
+            lv_obj_set_style_bg_opa(emotion_left_cheek_, LV_OPA_COVER, 0);
+            lv_obj_set_style_bg_opa(emotion_right_cheek_, LV_OPA_COVER, 0);
+            lv_obj_remove_flag(emotion_left_cheek_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(emotion_right_cheek_, LV_OBJ_FLAG_HIDDEN);
+        }
     } else if (angry) {
         eye_width = face_width * 19 / 100;
         eye_height = face_height * 13 / 100;
@@ -609,9 +709,9 @@ void LcdDisplay::UpdateLargeEmotionFrame() {
         eye_y = face_height * 25 / 100;
         left_eye_x = face_width * 21 / 100;
         right_eye_x = face_width * 61 / 100;
-        mouth_width = face_width * 16 / 100;
-        mouth_height = face_height * 18 / 100;
-        mouth_y = face_height * 65 / 100;
+        mouth_width = face_width * (shocked ? 20 : 16) / 100;
+        mouth_height = face_height * (shocked ? 23 : 18) / 100;
+        mouth_y = face_height * (shocked ? 61 : 65) / 100;
     } else if (thinking) {
         eye_height = face_height * 23 / 100;
         eye_y = face_height * 29 / 100;
@@ -620,6 +720,11 @@ void LcdDisplay::UpdateLargeEmotionFrame() {
         mouth_y = face_height * 69 / 100;
         lv_obj_remove_flag(emotion_right_brow_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_transform_rotation(emotion_right_brow_, -120, 0);
+        if (confused) {
+            lv_obj_remove_flag(emotion_left_brow_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_style_transform_rotation(emotion_left_brow_, 100, 0);
+            mouth_x_offset = face_width * 6 / 100;
+        }
     } else if (sleepy) {
         eye_width = face_width * 18 / 100;
         eye_height = face_height * 3 / 100;
@@ -635,12 +740,23 @@ void LcdDisplay::UpdateLargeEmotionFrame() {
                        !winking && emotion_frame_ % 54 < 2;
     if (blink) eye_height = face_height * 3 / 100;
 
+    int right_eye_y = eye_y;
+    int right_eye_width = eye_width;
+    int right_eye_height = eye_height;
+    if (thinking && !blink) {
+        right_eye_y = face_height * 34 / 100;
+        right_eye_width = face_width * 13 / 100;
+        right_eye_height = face_height * 14 / 100;
+    } else if (winking && !blink) {
+        right_eye_height = face_height * 3 / 100;
+    } else if (playful) {
+        right_eye_y = face_height * 36 / 100;
+        right_eye_width = face_width * 13 / 100;
+        right_eye_height = face_height * 10 / 100;
+    }
+
     place(emotion_left_eye_, left_eye_x, eye_y, eye_width, eye_height);
-    place(emotion_right_eye_, right_eye_x,
-          (thinking && !blink) ? face_height * 34 / 100 : eye_y,
-          thinking ? face_width * 13 / 100 : eye_width,
-          (winking && !blink) ? face_height * 3 / 100 :
-          (thinking && !blink ? face_height * 14 / 100 : eye_height));
+    place(emotion_right_eye_, right_eye_x, right_eye_y, right_eye_width, right_eye_height);
 
     if (speaking) {
         static const uint8_t mouth_steps[] = {6, 13, 20, 10, 17, 7, 15, 19};
@@ -649,7 +765,8 @@ void LcdDisplay::UpdateLargeEmotionFrame() {
             (sizeof(mouth_steps) / sizeof(mouth_steps[0]))] / 100;
         mouth_y = face_height * 66 / 100 - mouth_height / 4;
     }
-    place(emotion_mouth_, (face_width - mouth_width) / 2, mouth_y, mouth_width, mouth_height);
+    place(emotion_mouth_, (face_width - mouth_width) / 2 + mouth_x_offset,
+          mouth_y, mouth_width, mouth_height);
 
     const bool show_activity = listening || connecting || speaking;
     const int dot_size = std::max(5, face_width * 2 / 100);

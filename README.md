@@ -1,6 +1,6 @@
 # xiaozhi-esp32 · 小智AI 聊天机器人
 
-基于 [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) v2.2.6，针对 **微雪 ESP32-S3-Touch-AMOLED-1.8** 开发板的个性化定制版本。
+基于 [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 定制，当前版本 **2.3.0**，针对 **微雪 ESP32-S3-Touch-AMOLED-1.8** 开发板优化。
 
 ## 硬件
 
@@ -19,13 +19,12 @@
 
 | 应用 | 功能 |
 |------|------|
-| 小智AI | WebSocket 语音助手，唤醒词交互，支持 Qwen/DeepSeek 大模型 |
+| 小智AI | WebSocket 语音助手，支持 LLM 驱动的 21 种动态表情 |
 | 设置 | WiFi、电量、固件版本、硬件信息 |
 | 天气 | 高德 API 实时天气 + 3 天预报 |
-| 姿态仪 | Roll/Pitch 弧表 + 气泡水平仪 |
+| 姿态仪 | 20 FPS 气泡水平仪、圆形限位、水平判定、一键归零 |
 | 弹球物理 | 重力小球碰撞模拟 |
-| 贪吃蛇 | 重力方向操控 |
-| 练耳 | 音程识别训练 |
+| 练耳 | 高低/相同音高答题、计分、连胜、三级自适应难度 |
 | 节拍器 | BPM / 拍号 / 语音数拍 |
 
 ## 编译与烧录
@@ -48,6 +47,18 @@ bash tools/build.sh build
 bash tools/build.sh -p COM端口 flash
 ```
 
+2.2.x 及更早版本尚未接入自建 OTA，需要通过 USB 烧录一次 2.3.0。
+从 2.3.0 开始，设备每次联网会检查自建 OTA 服务，后续版本可直接在线升级。
+
+### OTA 安全机制
+
+- 固件写入未运行的 OTA 分区，不覆盖当前可用版本；
+- 下载前后核对 Content-Length 和服务端声明大小；
+- 流式校验 SHA-256；
+- 核对 ESP 应用项目名和内嵌版本；
+- 新固件未成功启动时自动回滚；
+- OTA 服务不可用时快速放行，不影响语音功能。
+
 ### 编译踩坑
 
 常见问题及解决方案参见 [CLAUDE.md](CLAUDE.md)。
@@ -58,10 +69,15 @@ bash tools/build.sh -p COM端口 flash
 - [MQTT + UDP 混合通信协议](docs/mqtt-udp.md)
 - [MCP 协议交互流程](docs/mcp-protocol.md)
 - [MCP 物联网控制用法](docs/mcp-usage.md)
+- [Reddy OTA 升级与回滚](docs/reddy-ota.md)
 
 ## 服务器部署
 
-本项目默认接入 [xiaozhi.me](https://xiaozhi.me) 官方服务器。如需自建服务器：
+Reddy 定制服务端源码位于本仓库的
+[`reddy-server`](https://github.com/hitliang/xiaozhi-esp32/tree/reddy-server)
+分支，包含提示词与记忆优化、LLM 表情协议、管理页面和 OTA 发布服务。
+
+其他可选服务端：
 
 - [xinnan-tech/xiaozhi-esp32-server](https://github.com/xinnan-tech/xiaozhi-esp32-server) Python
 - [joey-zhou/xiaozhi-esp32-server-java](https://github.com/joey-zhou/xiaozhi-esp32-server-java) Java

@@ -981,8 +981,9 @@ endmenu
         default ""
         help
             Set a custom WebSocket server URL (e.g. ws://59.110.161.101:7070/).
-            When set, the device skips OTA activation and connects directly
-            to this server using the WebSocket protocol.
+            When set, the device checks CONFIG_OTA_URL for firmware updates,
+            skips account activation, and connects to this server using the
+            WebSocket protocol.
             Leave empty to use the default OTA server.
 
 endmenu
