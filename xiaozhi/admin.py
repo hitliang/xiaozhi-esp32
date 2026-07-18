@@ -206,7 +206,7 @@ class AdminServer:
             await self._api_ota_check(writer, headers, b"")
         elif route.startswith("/ota/firmware/"):
             await self._ota_firmware(
-                writer, route.removeprefix("/ota/firmware/")
+                writer, route[len("/ota/firmware/"):]
             )
         elif route == "/api/messages":
             await self._api_messages(writer, query)
